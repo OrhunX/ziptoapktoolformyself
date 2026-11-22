@@ -1,6 +1,0 @@
-*.xcodeproj
-build/
-Payload/
-*.ipa
-App/Info.plist
-Widget/Info.plist

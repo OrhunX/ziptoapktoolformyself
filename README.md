@@ -6,14 +6,6 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
-## iPhone version (ios/)
-
-A SwiftUI app with the same design, playlists and share codes (codes open on both platforms). GitHub Actions (`build-ios.yml`, macOS runner, XcodeGen) builds an unsigned IPA and publishes it as the `ios-latest` release; install it with Sideloadly using a free Apple ID (re-install every 7 days).
-
-- Sources: imported files (own player, real FFT visualizer, Lock Screen controls), the Music library / Apple Music, and Spotify through the Spotify iOS SDK (Premium; iOS may open Spotify for a moment when it is not running).
-- Widgets: Home Screen small / medium / large with play, next and previous buttons (iOS 17 interactive widgets) and Lock Screen circular / rectangular / inline.
-- iOS limits: apps cannot control YouTube Music or read other apps' audio, so YouTube Music songs are skipped and the visualizer is an ambient animation for Apple Music and Spotify. A silent mixable audio loop keeps the app alive so playlists can move on in the background (fine for sideloading, not App Store-compliant).
-
 ## What's new in 1.3
 
 - **Spotify through its official SDK.** Spotify ignores "play this song" requests from apps it does not know and resumes whatever it had paused. Version 1.3 uses the Spotify Android SDK (App Remote, `app/libs`) to play the exact track (`spotify:track:...`) in the background. Approve once in Settings → Spotify (Spotify Premium is required by Spotify to pick songs; the app is in Spotify's development mode, so at most 5 approved accounts).
