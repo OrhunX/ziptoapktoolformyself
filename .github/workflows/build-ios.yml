@@ -1,0 +1,71 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+    paths: [ 'ios/**', '.github/workflows/build-ios.yml' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project UltimateMusicWidget.xcodeproj \
+            -scheme UltimateMusicWidget \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: .*deprecated|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" build.log || { grep -B2 -A8 "error:" build.log | head -200; exit 1; }
+
+      - name: Package the IPA (ad-hoc signed with entitlements; Sideloadly re-signs it)
+        working-directory: ios
+        run: |
+          APP=build/Build/Products/Release-iphoneos/UltimateMusicWidget.app
+          ls "$APP" "$APP/PlugIns" "$APP/Frameworks"
+          codesign --force --sign - "$APP/Frameworks/SpotifyiOS.framework"
+          codesign --force --sign - --entitlements Widget/Widget.entitlements "$APP/PlugIns/UltimateWidgetExtension.appex"
+          codesign --force --sign - --entitlements App/App.entitlements "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry UltimateMusicWidget.ipa Payload
+          ls -la UltimateMusicWidget.ipa
+
+      - name: Upload the IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: UltimateMusicWidget-ios
+          path: ios/UltimateMusicWidget.ipa
+
+      - name: Publish the IPA as the "ios-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create ios-latest ios/UltimateMusicWidget.ipa \
+            --title "Ultimate Music Widget for iPhone (latest build)" \
+            --notes "Unsigned iOS build from commit ${GITHUB_SHA::7}. Install with Sideloadly (it signs the app with your Apple ID; free accounts must re-install every 7 days)." \
+            --latest=false
