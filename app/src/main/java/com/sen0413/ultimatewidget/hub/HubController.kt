@@ -115,7 +115,7 @@ object HubController {
     private class ActiveSession(
         val name: String,
         val playlistIds: List<Long>,
-        val entries: List<PlaylistEntry>,
+        var entries: List<PlaylistEntry>,
         var order: MutableList<Int>,
         var pos: Int,
     ) {
@@ -177,7 +177,13 @@ object HubController {
             library.refresh()
         }
         // Favorites changed -> the heart on every surface follows.
-        scope.launch { playlists.playlists.collect { publish() } }
+        // Songs reordered or removed while the playlist plays: the session follows the new list.
+        scope.launch {
+            playlists.playlists.collect {
+                syncSession(it)
+                publish()
+            }
+        }
         publish()
     }
 
@@ -613,6 +619,31 @@ object HubController {
                 publish()
             }
         }
+    }
+
+    private fun syncSession(lists: List<Playlist>) {
+        val s = session ?: return
+        if (s.playlistIds.size != 1) return
+        val p = lists.firstOrNull { it.id == s.playlistIds[0] } ?: return
+        if (p.entries == s.entries) return
+        val newEntries = p.entries
+        if (newEntries.isEmpty()) {
+            endSession()
+            return
+        }
+        val currentId = s.entry.id
+        val newOrder = if (shuffle) {
+            val kept = s.order.map { s.entries[it].id }.mapNotNull { id -> newEntries.indexOfFirst { it.id == id }.takeIf { it >= 0 } }
+            (kept + newEntries.indices.filter { it !in kept }).toMutableList()
+        } else {
+            newEntries.indices.toMutableList()
+        }
+        val newPos = newOrder.indexOfFirst { newEntries[it].id == currentId }
+        s.entries = newEntries
+        s.order = newOrder
+        // The playing song was removed: "next" continues from where it was.
+        s.pos = if (newPos >= 0) newPos else (s.pos - 1).coerceIn(0, newOrder.lastIndex)
+        s.rebuildQueue()
     }
 
     private fun endSession() {

@@ -107,6 +107,14 @@ class MainActivity : Activity(), Host {
     }
 
     private fun handleIntent(intent: Intent?) {
+        // A playlist share link (from a QR code or a message): umw://import?c=UMW1-...
+        val data = intent?.data
+        if (data != null && data.scheme == "umw") {
+            intent.data = null
+            val code = data.getQueryParameter("c").orEmpty()
+            open(Tab.PLAYLISTS)
+            (screen(Tab.PLAYLISTS) as? PlaylistsScreen)?.showImport(code)
+        }
         intent?.getStringExtra(EXTRA_TAB)?.let { name ->
             intent.removeExtra(EXTRA_TAB)
             runCatching { Tab.valueOf(name) }.getOrNull()?.let { open(it) }
@@ -328,6 +336,28 @@ class MainActivity : Activity(), Host {
             .show()
     }
 
+    private var imageCallback: ((Uri) -> Unit)? = null
+
+    override fun pickImage(onPicked: (Uri) -> Unit) {
+        imageCallback = onPicked
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent(android.provider.MediaStore.ACTION_PICK_IMAGES)
+        } else {
+            Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        runCatching { startActivityForResult(intent, REQUEST_IMAGE) }.onFailure { imageCallback = null }
+    }
+
+    @Deprecated("Framework Activity results; this app has no AndroidX activity dependency.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_IMAGE) {
+            val uri = data?.data
+            if (resultCode == RESULT_OK && uri != null) imageCallback?.invoke(uri)
+            imageCallback = null
+        }
+    }
+
     override fun toast(text: CharSequence) {
         Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
     }
@@ -363,5 +393,6 @@ class MainActivity : Activity(), Host {
         const val EXTRA_TAB = "com.sen0413.ultimatewidget.extra.TAB"
         private const val STATE_TAB = "tab"
         private const val REQUEST_PERMISSION = 41
+        private const val REQUEST_IMAGE = 42
     }
 }

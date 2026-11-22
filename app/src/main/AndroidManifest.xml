@@ -66,6 +66,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Playlist share links and QR codes: umw://import?c=UMW1-... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="umw" android:host="import" />
+            </intent-filter>
         </activity>
 
         <!-- Full-screen player shown over the lock screen; minimizes to the small media card -->

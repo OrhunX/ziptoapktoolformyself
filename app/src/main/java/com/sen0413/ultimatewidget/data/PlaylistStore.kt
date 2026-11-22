@@ -78,16 +78,12 @@ class PlaylistStore(context: Context) {
         publish()
     }
 
-    /** Manual order of the playlist list (drag and drop). */
-    suspend fun movePlaylist(fromId: Long, toIndex: Int) = withContext(Dispatchers.IO) {
-        val ids = _playlists.value.filter { !it.isFavorites }.sortedWith(compareBy({ it.position }, { it.createdAt })).map { it.id }
-            .toMutableList()
-        if (!ids.remove(fromId)) return@withContext
-        ids.add(toIndex.coerceIn(0, ids.size), fromId)
+    /** Manual order of the playlist list (drag and drop): [orderedIds] in their new order. */
+    suspend fun setPlaylistOrder(orderedIds: List<Long>) = withContext(Dispatchers.IO) {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
-            ids.forEachIndexed { i, id ->
+            orderedIds.forEachIndexed { i, id ->
                 db.update(T_PLAYLISTS, ContentValues().apply { put("position", i) }, "id = ?", arrayOf(id.toString()))
             }
             db.setTransactionSuccessful()

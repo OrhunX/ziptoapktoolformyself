@@ -172,4 +172,106 @@
     <string name="toast_modes_hub_only">Shuffle and repeat work for hub playlists and music on this phone; Spotify and YouTube Music keep their own</string>
     <string name="toast_nothing_playable">None of these songs could be started, playlist stopped</string>
     <string name="mix_name">Mix · %1$d playlists</string>
+
+    <!-- v1.2: playlists UI -->
+    <string name="cd_close_selection">Clear the selection</string>
+    <string name="cd_more">More options</string>
+    <string name="cd_pinned">Pinned</string>
+    <string name="cd_qr">QR code of the playlist</string>
+    <string name="cd_reorder">Drag to reorder</string>
+    <string name="cd_repeat_all">Repeat all</string>
+    <string name="cd_repeat_off">Repeat off</string>
+    <string name="cd_repeat_one">Repeat this song</string>
+    <string name="color_apply">Apply</string>
+    <string name="color_auto">From covers</string>
+    <string name="color_pick">Pick a color</string>
+    <string name="color_transparency">Transparency</string>
+    <string name="copy_name">%1$s (copy)</string>
+    <string name="cover_auto">Collage</string>
+    <string name="cover_emoji">Emoji</string>
+    <string name="cover_failed">That photo could not be used</string>
+    <string name="cover_photo">Photo</string>
+    <string name="done">Done</string>
+    <string name="duration_hm">%1$d h %2$d min</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="edit_color">Color</string>
+    <string name="edit_cover">Cover</string>
+    <string name="edit_default_repeat">Repeat when started</string>
+    <string name="edit_default_shuffle">Start shuffled</string>
+    <string name="edit_description">Description</string>
+    <string name="edit_name">Name</string>
+    <string name="edit_pin">Pin to top</string>
+    <string name="edit_playback">Playback</string>
+    <string name="edit_title">Edit playlist</string>
+    <string name="emoji_hint">🎧</string>
+    <string name="enter_code">Enter code</string>
+    <string name="import_button">Import</string>
+    <string name="import_done">Imported “%1$s”</string>
+    <string name="import_hint">Paste the playlist code here</string>
+    <string name="import_invalid">This is not a valid playlist code</string>
+    <string name="import_local_found">%1$d of %2$d songs from the sender’s phone were found on this phone; the others get Spotify / YouTube Music search buttons.</string>
+    <string name="import_needs_pin">This code is protected with a PIN</string>
+    <string name="import_paste">Paste the copied code</string>
+    <string name="import_pin_hint">PIN</string>
+    <string name="import_preview">%1$s · %2$d songs</string>
+    <string name="import_preview_from">%1$s · %2$d songs · from %3$s</string>
+    <string name="import_title">Enter playlist code</string>
+    <string name="import_wrong_pin">Wrong PIN</string>
+    <string name="menu_add_to">Add to another playlist</string>
+    <string name="menu_copy">Copy to a new playlist</string>
+    <string name="menu_delete">Delete</string>
+    <string name="menu_edit">Edit</string>
+    <string name="menu_mix_with">Mix with another playlist</string>
+    <string name="menu_rename">Rename</string>
+    <string name="menu_share">Share code</string>
+    <string name="no_other_playlists">Create another playlist first</string>
+    <string name="pick_row">%1$s (%2$d)</string>
+    <string name="play">Play</string>
+    <string name="playlist_meta">%1$s · %2$s</string>
+    <string name="removed_undo">Removed “%1$s”</string>
+    <string name="repeat_all">All</string>
+    <string name="repeat_off">Off</string>
+    <string name="repeat_one">One song</string>
+    <string name="search_all_in">Search all in %1$s</string>
+    <string name="search_in">Search “%1$s” in %2$s</string>
+    <string name="select_bar">%1$d playlists · %2$d songs</string>
+    <string name="select_mix">Shuffle play</string>
+    <string name="select_save">Save as playlist</string>
+    <string name="share_body">Creates a code your friend pastes into Playlists › Enter code. Songs from your phone travel as their names only.</string>
+    <string name="share_code_ready">Your playlist code</string>
+    <string name="share_copied">Code copied</string>
+    <string name="share_copy">Copy</string>
+    <string name="share_create">Create code</string>
+    <string name="share_empty">Add songs before sharing</string>
+    <string name="share_message">🎵 %1$s
+Open Ultimate Music Widget › Playlists › Enter code and paste:
+
+%2$s
+
+Or tap: %3$s</string>
+    <string name="share_name_hint">Your name (optional)</string>
+    <string name="share_pin_hint">PIN (optional)</string>
+    <string name="share_pin_note">With a PIN, only people who know it can open the code.</string>
+    <string name="share_pin_reminder">Remember to tell your friend the PIN.</string>
+    <string name="share_qr_hint">Scan with the phone camera to open it in the app</string>
+    <string name="share_qr_too_long">This playlist is too long for a QR code; send the code instead.</string>
+    <string name="share_send">Send</string>
+    <string name="share_title">Share “%1$s”</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="sort_manual">My order</string>
+    <string name="sort_most_played">Most played</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_recent">Recently added</string>
+    <string name="toast_appended">%1$d songs added to %2$s</string>
+    <string name="toast_assigned">%1$d songs will play from %2$s</string>
+    <string name="toast_copied">Copied to %1$s</string>
+    <string name="undo">Undo</string>
+    <plurals name="song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <plurals name="missing_banner">
+        <item quantity="one">%d song cannot play on this phone</item>
+        <item quantity="other">%d songs cannot play on this phone</item>
+    </plurals>
 </resources>

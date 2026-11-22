@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.palette)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.zxing.core) // QR codes for playlist share codes (encoding only)
 
     testImplementation(libs.junit)
 }

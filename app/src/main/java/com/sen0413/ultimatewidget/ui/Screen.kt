@@ -22,6 +22,8 @@ interface Host {
     fun pickPlaylistFor(draft: EntryDraft)
     fun promptNewPlaylist(onCreated: (Long) -> Unit = {})
     fun toast(text: CharSequence)
+    /** Lets the user choose a photo (for playlist covers). */
+    fun pickImage(onPicked: (android.net.Uri) -> Unit)
     fun open(tab: Tab)
 }
 
