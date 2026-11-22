@@ -111,6 +111,8 @@ object HubController {
         var nudges = 0
         /** Android blocked opening the app; we posted "tap to continue" and wait for the tap. */
         var waitingForTap = false
+        /** We opened the other app on top of ours; come back once its song is playing. */
+        var returnToApp = false
         val entry: PlaylistEntry get() = playlist.entries[index]
         val queue: List<QueueEntry> = playlist.entries.mapIndexed { i, e ->
             QueueEntry(e.title, e.artist, e.sourceLabel, index = i, queueId = e.id, sourcePackage = e.sourcePackage)
@@ -324,6 +326,7 @@ object HubController {
         s.attempts = 0
         s.nudges = 0
         s.waitingForTap = false
+        s.returnToApp = false
         HubNotifications.cancelContinue(app)
         val entry = s.entry
 
@@ -374,7 +377,13 @@ object HubController {
             controller.transportControls.playFromSearch(s.query, searchExtras(entry))
             return
         }
-        if (canStartActivities() && launchPlayFromSearch(pkg, entry, s.query)) return
+        if (canStartActivities()) {
+            val wasOnScreen = visibleScreens > 0
+            if (launchPlayFromSearch(pkg, entry, s.query)) {
+                s.returnToApp = wasOnScreen
+                return
+            }
+        }
         if (controller != null) {
             controller.transportControls.playFromSearch(s.query, searchExtras(entry))
             return
@@ -485,6 +494,12 @@ object HubController {
     } catch (t: Throwable) {
         Log.i(TAG, "Could not launch $pkg: ${t.javaClass.simpleName}")
         false
+    }
+
+    private fun returnToApp() {
+        val intent = Intent(app, com.sen0413.ultimatewidget.ui.MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        runCatching { app.startActivity(intent) }
     }
 
     /** Android lets us open another app only while we are on screen, or with the overlay permission. */
@@ -662,7 +677,14 @@ object HubController {
                 snapshot.track?.title, snapshot.isPlaying, now,
                 positionMs = snapshot.positionAt(now), durationMs = snapshot.track?.durationMs ?: 0L,
             )
-            if (!wasArmed && watch.isArmed) HubNotifications.cancelContinue(app)
+            if (!wasArmed && watch.isArmed) {
+                HubNotifications.cancelContinue(app)
+                if (s.returnToApp) {
+                    // The song plays in the other app now; control stays with the hub.
+                    s.returnToApp = false
+                    returnToApp()
+                }
+            }
             if (result == ExternalTrackWatch.Result.MOVED_ON) {
                 s.watch = null
                 externalController?.transportControls?.pause()

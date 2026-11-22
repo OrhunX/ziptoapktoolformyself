@@ -1,10 +1,19 @@
-# The Ultimate Music Widget — v1.0
+# The Ultimate Music Widget — v1.1
 
 SEN0413 · Project 17 (App Widgets / Extensions)
 Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
+
+## What's new in 1.1
+
+| Area | Change |
+|---|---|
+| **Cross-app playlists** | Every other player is paused before the next song starts, so only one app ever plays. The song is requested through the app's session first, then through its own play-from-search screen; if it loads paused, the hub presses play; a different song is never accepted in its place (after 15 s the hub says so and moves on). When Android does not let the hub open a closed app, a "tap to continue" notification appears. |
+| **Lock screen** | Our card (cover, song, source, controls, heart) is shown for every source, including Spotify and YouTube Music. A full-screen player appears when the phone wakes while music plays: swipe the cover for next/previous, swipe up to unlock, ▾ shrinks it to the small card, tapping the card opens it again. |
+| **Glass** | A frosted, translucent look for the app (blurred backdrop on Android 12+) and a Glass widget theme. |
+| **Visualizer** | 10 styles in the app (Ring, Burst, Blob, Bars, Mirror, Wave, Peaks, LED, Spectrum, Particles), 6 in the widget (Bars, Mirror, Dots, LED, Center, Rainbow). Faster response, a beat pulse on every bass kick, and a sensitivity slider in Setup. |
 
 ## Open and run
 
@@ -25,7 +34,7 @@ Unit tests (18): `./gradlew test`.
 | **Library** | Three bundled demo tracks plus every audio file on the phone (MediaStore). |
 | **Hub playlists** | Playlists that mix local files with songs from Spotify, YouTube Music or any player. Each entry is played by the app it belongs to; the hub moves on when a song ends. Stored in SQLite. |
 | **Favorites** | The heart (in the app and on the widget) saves the current song from *any* app. |
-| **Setup** | Each permission next to the feature it unlocks. |
+| **Setup** | Each permission next to the feature it unlocks; appearance (Night / Glass), lock-screen player, visualizer sensitivity, a shortcut to hide Spotify / YouTube Music cards. |
 | **Widget** | 2×1 / 4×2 / 4×4, visualizer in every size (Bars, Mirror, Dots), source chip, video chip, favorite, *Up next* list, editor with live preview. |
 
 ## Demo script (about 4 minutes)
@@ -94,6 +103,9 @@ app/src/main/java/com/sen0413/ultimatewidget/
 * **Hub playlists with other apps:** the hub asks the app to play "title artist" through its
   MediaSession (`playFromSearch`, the request Assistant and Android Auto use). The app must
   be running, and what it plays is the app's own search result (Spotify Free may shuffle).
+* **Lock-screen player:** needs "Display over other apps" (Setup). Android cannot remove other
+  apps' lock-screen cards; Setup links to their notification settings so you can turn them off.
+  The Glass widget is translucent but not blurred (widgets cannot blur what is behind them).
 * **Background visualizer:** Android only lets the analysis start from a visible moment
   (the app on screen or a widget tap). After a long pause, open the app once or tap the
   widget's hint.
