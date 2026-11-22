@@ -26,6 +26,7 @@ import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import com.sen0413.ultimatewidget.R
 import com.sen0413.ultimatewidget.data.EntryDraft
+import com.sen0413.ultimatewidget.data.ArtStore
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.SpotifyLink
 import com.sen0413.ultimatewidget.hub.HubState
@@ -41,6 +42,8 @@ import com.sen0413.ultimatewidget.widget.HubWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -140,6 +143,14 @@ class MainActivity : Activity(), Host {
         scope.launch { VisualizerEngine.bars.collect { onBars(it) } }
         scope.launch { HubController.library.tracks.collect { tracks -> screens.values.forEach { it.onLibrary(tracks) } } }
         scope.launch { HubController.playlists.playlists.collect { lists -> screens.values.forEach { it.onPlaylists(lists) } } }
+        scope.launch {
+            // Covers often arrive in bursts (a playlist being filled in): refresh once it settles.
+            ArtStore.version.collectLatest { version ->
+                if (version == 0) return@collectLatest
+                delay(400)
+                screens.values.forEach { it.onArtChanged() }
+            }
+        }
         scope.launch { HubController.messages.collect { toast(it) } }
         scope.launch { maybeLinkSpotify() }
     }
@@ -154,7 +165,7 @@ class MainActivity : Activity(), Host {
             SpotifyLink.validToken(this) != null -> HubController.resolveSpotifyIds()
             !HubController.hasSpotifySongs() -> Unit
             SpotifyLink.shouldAskFirstTime(this) -> SpotifyLink.authorize(this)
-            SpotifyLink.isAuthorized(this) && HubController.spotifySongsWithoutId().isNotEmpty() &&
+            SpotifyLink.isAuthorized(this) && HubController.spotifySongsNeedingLookup().isNotEmpty() &&
                 SpotifyLink.shouldRefreshToken(this) -> SpotifyLink.authorize(this)
         }
     }

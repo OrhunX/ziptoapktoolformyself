@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import com.sen0413.ultimatewidget.R
 import com.sen0413.ultimatewidget.data.ArtLoader
+import com.sen0413.ultimatewidget.data.ArtStore
 import com.sen0413.ultimatewidget.data.EntryDraft
 import com.sen0413.ultimatewidget.data.LocalTrack
 import com.sen0413.ultimatewidget.data.MusicLibrary
@@ -66,6 +67,8 @@ object HubController {
     private const val MAX_NUDGES = 3
     private const val TAKEOVER_GRACE_MS = 4_000L
     private const val RESUME_SLACK_MS = 3_000L
+    private const val ART_STABLE_MS = 2_500L
+    private const val MAX_SPOTIFY_LOOKUPS = 150
 
     val scope: CoroutineScope = MainScope()
 
@@ -673,21 +676,44 @@ object HubController {
     }
 
     /**
-     * Looks up the Spotify id of every saved Spotify song that does not have one yet (needs
-     * the short-lived token from approving the app), so all of them can be played exactly.
+     * With the short-lived token from approving Spotify: looks up the exact id of saved Spotify
+     * songs that lack one, and fetches covers for Spotify songs whose cover is not stored yet.
      */
+    private val spotifyTried = HashSet<String>()
+
     suspend fun resolveSpotifyIds() {
         if (SpotifyLink.validToken(app) == null) return
-        val missing = spotifySongsWithoutId()
-        if (missing.isEmpty()) return
+        val spotifySongs = playlists.playlists.value.flatMap { it.entries }.filter { it.sourcePackage == KnownApps.SPOTIFY }
         val found = HashMap<Long, String>()
-        for ((_, group) in missing.groupBy { TrackMatcher.key(it.title, it.artist) }) {
+        var lookups = 0
+        for ((_, group) in spotifySongs.groupBy { TrackMatcher.key(it.title, it.artist) }) {
+            if (lookups >= MAX_SPOTIFY_LOOKUPS) break
             val first = group.first()
-            val uri = SpotifyLink.findTrackUri(app, first.title, first.artist) ?: continue
-            group.forEach { found[it.id] = uri }
+            val knownId = group.firstNotNullOfOrNull { e -> e.mediaId?.takeIf { SpotifyLink.isPlayableId(it) } }
+            val needsArt = !ArtStore.has(app, first.title, first.artist)
+            if (knownId != null && !needsArt) continue
+            if (!spotifyTried.add(TrackMatcher.key(first.title, first.artist))) continue
+            lookups++
+            var imageUrl: String? = null
+            if (knownId == null) {
+                val track = SpotifyLink.findTrack(app, first.title, first.artist) ?: continue
+                group.forEach { found[it.id] = track.uri }
+                imageUrl = track.imageUrl
+            } else {
+                imageUrl = SpotifyLink.coverUrl(app, knownId)
+                    ?: SpotifyLink.findTrack(app, first.title, first.artist)?.imageUrl
+            }
+            if (needsArt && imageUrl != null) {
+                SpotifyLink.downloadImage(imageUrl)?.let { ArtStore.save(app, first.title, first.artist, it) }
+            }
         }
         playlists.setMediaIds(found)
     }
+
+    /** Spotify songs still missing their exact id or their cover. */
+    fun spotifySongsNeedingLookup(): List<PlaylistEntry> =
+        playlists.playlists.value.flatMap { it.entries }
+            .filter { it.sourcePackage == KnownApps.SPOTIFY && (!SpotifyLink.isPlayableId(it.mediaId) || !ArtStore.has(app, it.title, it.artist)) }
 
     fun spotifySongsWithoutId(): List<PlaylistEntry> =
         playlists.playlists.value.flatMap { it.entries }
@@ -1034,6 +1060,38 @@ object HubController {
         return if (favorite) base.copy(isFavorite = true) else base
     }
 
+    private var artCandidateKey: String? = null
+
+    /**
+     * Keeps the cover of a song another app is playing, once it has been stable for a moment
+     * (right after a song change some apps still show the previous cover).
+     */
+    private fun scheduleArtCapture(s: HubState) {
+        val cur = s.current
+        if (cur.kind != SourceKind.EXTERNAL) return // local files keep their art in the file
+        val t = cur.track ?: return
+        val art = t.art ?: return
+        if (t.title.isBlank()) return
+        val key = "${t.title}|${t.artist}|${System.identityHashCode(art)}"
+        if (key == artCandidateKey) return
+        artCandidateKey = key
+        handler.removeCallbacks(captureArt)
+        handler.postDelayed(captureArt, ART_STABLE_MS)
+    }
+
+    private val captureArt = Runnable {
+        val cur = _state.value.current
+        val t = cur.track ?: return@Runnable
+        val art = t.art ?: return@Runnable
+        if ("${t.title}|${t.artist}|${System.identityHashCode(art)}" != artCandidateKey) return@Runnable
+        ArtStore.save(app, t.title, t.artist, art)
+        // Also under the playlist's own spelling of the song, which can differ slightly.
+        val e = session?.entry
+        if (e != null && (e.title != t.title || e.artist != t.artist) && TrackMatcher.sameTitle(e.title, t.title)) {
+            ArtStore.save(app, e.title, e.artist, art)
+        }
+    }
+
     private val pendingRender = java.util.concurrent.atomic.AtomicReference<HubState?>(null)
     private val pendingBars = java.util.concurrent.atomic.AtomicReference<FloatArray?>(null)
 
@@ -1041,6 +1099,7 @@ object HubController {
         val s = buildState()
         _state.value = s
         if (!::app.isInitialized) return
+        scheduleArtCapture(s)
 
         val cur = s.current
         val renderKey = listOf(

@@ -12,6 +12,7 @@ import android.view.View
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import com.sen0413.ultimatewidget.data.ArtLoader
+import com.sen0413.ultimatewidget.data.ArtStore
 import com.sen0413.ultimatewidget.data.Playlist
 import com.sen0413.ultimatewidget.data.PlaylistEntry
 import com.sen0413.ultimatewidget.hub.HubController
@@ -25,8 +26,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * A playlist's cover: the user's photo, an emoji on the playlist color, or by default a
- * 2×2 collage of the first four songs' covers (real art for local files, generated art for
- * everything else). Reports the cover's main color so cards and headers can take it on.
+ * 2×2 collage of the first four songs' covers (stored covers, the files' own art, or
+ * generated art for songs whose cover is not known yet). Reports the cover's main color so cards and headers can take it on.
  */
 class PlaylistCover(context: Context) : View(context) {
     var cornerRadius: Float = dp(18f)
@@ -47,7 +48,10 @@ class PlaylistCover(context: Context) : View(context) {
     private val dst = RectF()
 
     fun bind(playlist: Playlist) {
-        val newKey = listOf(playlist.id, playlist.coverPath, playlist.emoji, playlist.color, playlist.entries.take(4).map { it.id })
+        val newKey = listOf(
+            playlist.id, playlist.coverPath, playlist.emoji, playlist.color,
+            playlist.entries.take(4).map { it.id }, ArtStore.version.value,
+        )
         if (newKey == key) return
         key = newKey
         job?.cancel()
@@ -133,16 +137,21 @@ class PlaylistCover(context: Context) : View(context) {
         fun thumbnail(bitmap: Bitmap, px: Int): Bitmap =
             if (bitmap.width <= px && bitmap.height <= px) bitmap else Bitmap.createScaledBitmap(bitmap, px, px, true)
 
-        /** Cover art for one playlist song: the file's own art, a bundled cover or a generated one. */
+        /**
+         * Cover art for one playlist song: the stored cover (saved when it played, or from
+         * Spotify), the audio file's own art, or a generated cover until a real one is known.
+         */
         suspend fun artFor(context: Context, entry: PlaylistEntry): Bitmap {
-            val track = if (entry.isLocal) HubController.library.tracks.value.firstOrNull { it.uri == entry.mediaUri } else null
-            if (track != null && track.coverRes != 0) {
-                val decoded = withContext(Dispatchers.IO) {
-                    BitmapFactory.decodeResource(context.resources, track.coverRes, BitmapFactory.Options().apply { inSampleSize = 2 })
+            ArtStore.load(context, entry.title, entry.artist)?.let { return it }
+            val uri = entry.mediaUri
+            if (entry.isLocal && uri != null) {
+                val real = ArtLoader.loadReal(context, uri)
+                if (real != null) {
+                    ArtStore.save(context, entry.title, entry.artist, real)
+                    return real
                 }
-                if (decoded != null) return decoded
             }
-            return ArtLoader.load(context, track?.artUri, "${entry.title}|${entry.artist}")
+            return ArtLoader.load(context, null, "${entry.title}|${entry.artist}")
         }
     }
 }

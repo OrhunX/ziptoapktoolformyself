@@ -125,7 +125,7 @@
     <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v1.4\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
+    <string name="about_body">The Ultimate Music Widget · v1.5\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>

@@ -245,7 +245,13 @@ object SpotifyLink {
      * Finds the Spotify id of a song by title and artist. Null when there is no good match,
      * or the token is missing or expired.
      */
-    suspend fun findTrackUri(context: Context, title: String, artist: String): String? {
+    /** A Spotify track found by the Web API: its exact id and its album cover (if any). */
+    data class FoundTrack(val uri: String, val imageUrl: String?)
+
+    suspend fun findTrackUri(context: Context, title: String, artist: String): String? =
+        findTrack(context, title, artist)?.uri
+
+    suspend fun findTrack(context: Context, title: String, artist: String): FoundTrack? {
         val token = validToken(context) ?: return null
         return withContext(Dispatchers.IO) {
             val strict = buildString {
@@ -256,25 +262,67 @@ object SpotifyLink {
         }
     }
 
-    private fun search(context: Context, token: String, query: String, title: String): String? {
-        val url = URL(
-            "https://api.spotify.com/v1/search?type=track&limit=5&q=" + URLEncoder.encode(query, "UTF-8"),
-        )
-        val conn = url.openConnection() as HttpURLConnection
+    /** The album cover URL of a known track ("spotify:track:..."), or null. */
+    suspend fun coverUrl(context: Context, uri: String): String? {
+        val token = validToken(context) ?: return null
+        val id = uri.substringAfterLast(':').takeIf { uri.startsWith("spotify:track:") && it.isNotBlank() } ?: return null
+        return withContext(Dispatchers.IO) {
+            get(context, token, "https://api.spotify.com/v1/tracks/$id")?.let { imageOf(it) }
+        }
+    }
+
+    /** Downloads a cover image (Spotify's image CDN). */
+    suspend fun downloadImage(url: String): android.graphics.Bitmap? = withContext(Dispatchers.IO) {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.connectTimeout = 8_000
+            conn.readTimeout = 8_000
+            if (conn.responseCode == 200) conn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) } else null
+        } catch (t: Throwable) {
+            null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** The ~300 px album image of a track object. */
+    private fun imageOf(track: JSONObject): String? {
+        val images = track.optJSONObject("album")?.optJSONArray("images") ?: return null
+        var best: String? = null
+        var bestDistance = Int.MAX_VALUE
+        for (i in 0 until images.length()) {
+            val img = images.getJSONObject(i)
+            val distance = kotlin.math.abs(img.optInt("width", 300) - 300)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                best = img.optString("url").ifBlank { null }
+            }
+        }
+        return best
+    }
+
+    private fun search(context: Context, token: String, query: String, title: String): FoundTrack? {
+        val body = get(context, token, "https://api.spotify.com/v1/search?type=track&limit=5&q=" + URLEncoder.encode(query, "UTF-8"))
+            ?: return null
+        val items = body.optJSONObject("tracks")?.optJSONArray("items") ?: return null
+        // The first result whose name is really the song (never a cover of something else).
+        for (i in 0 until items.length()) {
+            val item = items.getJSONObject(i)
+            if (!TrackMatcher.sameTitle(title, item.optString("name"))) continue
+            val uri = item.optString("uri").ifBlank { null } ?: continue
+            return FoundTrack(uri, imageOf(item))
+        }
+        return null
+    }
+
+    private fun get(context: Context, token: String, url: String): JSONObject? {
+        val conn = URL(url).openConnection() as HttpURLConnection
         return try {
             conn.connectTimeout = 8_000
             conn.readTimeout = 8_000
             conn.setRequestProperty("Authorization", "Bearer $token")
             when (conn.responseCode) {
-                200 -> {
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val items = JSONObject(body).optJSONObject("tracks")?.optJSONArray("items")
-                    // The first result whose name is really the song (never a cover of something else).
-                    (0 until (items?.length() ?: 0)).asSequence()
-                        .map { items!!.getJSONObject(it) }
-                        .firstOrNull { TrackMatcher.sameTitle(title, it.optString("name")) }
-                        ?.optString("uri")?.ifBlank { null }
-                }
+                200 -> JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
                 401 -> {
                     handler.post { clearToken(context) }
                     null
@@ -282,7 +330,7 @@ object SpotifyLink {
                 else -> null
             }
         } catch (t: Throwable) {
-            Log.i(TAG, "search failed: ${t.javaClass.simpleName}")
+            Log.i(TAG, "Web API call failed: ${t.javaClass.simpleName}")
             null
         } finally {
             conn.disconnect()

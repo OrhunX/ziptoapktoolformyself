@@ -38,6 +38,10 @@ object ArtLoader {
         return bitmap
     }
 
+    /** The file's own art only (no generated cover); null when it has none. */
+    suspend fun loadReal(context: Context, artUri: String): Bitmap? =
+        withContext(Dispatchers.IO) { decode(context, artUri) }
+
     private fun decode(context: Context, uri: String): Bitmap? = runCatching {
         val parsed = Uri.parse(uri)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && parsed.scheme == "content") {

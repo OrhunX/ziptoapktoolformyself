@@ -222,6 +222,15 @@ class PlaylistsScreen(host: Host) : Screen(host) {
 
     // ---------------------------------------------------------------- data in
 
+    /** New covers were saved: redraw covers in place (no list rebuild, scroll stays put). */
+    override fun onArtChanged() {
+        overviewCovers.forEach { (cover, p) -> cover.bind(p) }
+        openPlaylist?.let { detailCover.bind(it) }
+        rowsById.values.forEach { it.loadArt() }
+    }
+
+    private val overviewCovers = ArrayList<Pair<PlaylistCover, Playlist>>()
+
     override fun onPlaylists(playlists: List<Playlist>) {
         this.playlists = playlists
         if (openId != null && openPlaylist == null) openId = null
@@ -292,6 +301,7 @@ class PlaylistsScreen(host: Host) : Screen(host) {
         sortChip.text = context.getString(sortLabel(sort))
         emptyCard.visibility = if (playlists.all { it.isFavorites && it.entries.isEmpty() }) View.VISIBLE else View.GONE
         shownOrder = sorted()
+        overviewCovers.clear()
         val rows = shownOrder.map { playlistCard(it) }
         overviewList.setRows(rows.map { it.first })
         rows.forEachIndexed { i, (row, handle) ->
@@ -321,6 +331,7 @@ class PlaylistsScreen(host: Host) : Screen(host) {
             contentDescription = context.getString(R.string.cd_cover)
             bind(p)
         }
+        overviewCovers += cover to p
         val check = ImageView(context).apply {
             setImageResource(R.drawable.ic_check)
             imageTintList = ColorStateList.valueOf(Ink.NIGHT)
@@ -726,6 +737,10 @@ class PlaylistsScreen(host: Host) : Screen(host) {
                 }
             }
             setOnClickListener { play(index, shuffled = false) }
+            loadArt()
+        }
+
+        fun loadArt() {
             HubController.scope.launch {
                 art.setImageBitmap(PlaylistCover.thumbnail(PlaylistCover.artFor(context, entry), context.dp(46)))
             }

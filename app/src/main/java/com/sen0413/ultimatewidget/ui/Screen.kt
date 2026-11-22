@@ -42,6 +42,8 @@ abstract class Screen(protected val host: Host) {
     open fun onLibrary(tracks: List<LocalTrack>) = Unit
     open fun onPlaylists(playlists: List<Playlist>) = Unit
     open fun onPermissionsChanged() = Unit
+    /** New song covers were saved. */
+    open fun onArtChanged() = Unit
     open fun onShown() = Unit
     open fun onHidden() = Unit
 
