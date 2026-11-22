@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ultimate Widget</string>
+    <string name="widget_label">Ultimate Music Widget</string>
+    <string name="widget_description">One widget for every music app, with a visualizer that follows the real audio.</string>
+    <string name="listener_label">Ultimate Widget media control</string>
+
+    <!-- Sources -->
+    <string name="source_local">Local files</string>
+    <string name="source_local_file">Local file</string>
+    <string name="nothing_playing">Nothing playing</string>
+    <string name="preview_title" translatable="false">Night Train</string>
+    <string name="unknown_title">Unknown title</string>
+    <string name="unknown_artist">Unknown artist</string>
+    <string name="demo_artist">Demo Band</string>
+
+    <!-- Widget -->
+    <string name="video_chip">▶ Video</string>
+    <string name="up_next">UP NEXT</string>
+    <string name="queue_empty">This app doesn’t share its queue</string>
+    <string name="vis_needs_permission">Tap to enable the visualizer</string>
+    <string name="vis_no_audio">No audio data yet · tap to open</string>
+
+    <!-- Accessibility -->
+    <string name="cd_play">Play %1$s</string>
+    <string name="cd_pause">Pause %1$s</string>
+    <string name="cd_next">Next song</string>
+    <string name="cd_previous">Previous song</string>
+    <string name="cd_cover">Album cover. Opens the app</string>
+    <string name="cd_source">Source: %1$s. Tap to switch apps</string>
+    <string name="cd_video">Watch the music video</string>
+    <string name="cd_favorite_add">Save to Favorites</string>
+    <string name="cd_favorite_remove">Remove from Favorites</string>
+    <string name="cd_add_to_playlist">Add to a playlist</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_delete">Delete</string>
+    <string name="cd_seek">Playback position</string>
+    <string name="cd_visualizer">Audio visualizer</string>
+
+    <!-- Navigation -->
+    <string name="tab_player">Player</string>
+    <string name="tab_library">Library</string>
+    <string name="tab_playlists">Playlists</string>
+    <string name="tab_settings">Setup</string>
+
+    <!-- Player -->
+    <string name="watch_video">Video</string>
+    <string name="style_wave">Wave</string>
+    <string name="style_ring">Ring</string>
+    <string name="playlist_position">%1$s · %2$d of %3$d</string>
+    <string name="vis_status_permission">Enable the visualizer</string>
+    <string name="vis_status_no_audio">No audio data from this app — bars stay flat instead of faking it</string>
+
+    <!-- Library -->
+    <string name="library_title">Library</string>
+    <string name="library_subtitle">%1$d songs on this phone</string>
+    <string name="library_permission_title">Play the music on this phone</string>
+    <string name="library_permission_body">Allow access to audio files to list your own songs next to the bundled demo tracks.</string>
+    <string name="library_allow">Allow access</string>
+    <string name="library_section_demo">Bundled demo tracks</string>
+    <string name="library_section_device">On this phone</string>
+
+    <!-- Playlists -->
+    <string name="playlists_title">Hub playlists</string>
+    <string name="playlists_subtitle">One playlist, songs from every app</string>
+    <string name="playlist_new">New playlist</string>
+    <string name="playlist_name_hint">Playlist name</string>
+    <string name="playlist_create">Create</string>
+    <string name="playlist_cancel">Cancel</string>
+    <string name="playlist_favorites">Favorites</string>
+    <string name="playlist_count">%1$d songs</string>
+    <string name="playlist_empty_title">No playlists yet</string>
+    <string name="playlist_empty_body">Create one, then add songs from your library or save what is playing in Spotify or YouTube Music.</string>
+    <string name="playlist_detail_empty">Empty playlist. Play something anywhere, then tap “Add current song”.</string>
+    <string name="playlist_add_current">Add current song</string>
+    <string name="playlist_play_all">Play all</string>
+    <string name="playlist_delete_title">Delete “%1$s”?</string>
+    <string name="playlist_delete_confirm">Delete</string>
+    <string name="playlist_remove_title">Remove “%1$s” from this playlist?</string>
+    <string name="playlist_remove_confirm">Remove</string>
+    <string name="playlist_pick_title">Add to playlist</string>
+    <string name="toast_added">Added to %1$s</string>
+    <string name="toast_already">Already in %1$s</string>
+    <string name="toast_nothing_playing">Nothing is playing yet</string>
+    <string name="toast_app_not_running">Open %1$s once so the hub can control it</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Setup</string>
+    <string name="setup_subtitle">Each permission is asked only for the feature that needs it</string>
+    <string name="setup_mic">Visualizer</string>
+    <string name="setup_mic_body">Microphone permission lets Android’s Visualizer read the audio spectrum. Nothing is recorded.</string>
+    <string name="setup_notifications">Playback notification</string>
+    <string name="setup_notifications_body">Shows media controls on the lock screen and in the shade.</string>
+    <string name="setup_access">Control other apps</string>
+    <string name="setup_access_body">Notification access lets the hub control Spotify, YouTube Music and other players.</string>
+    <string name="setup_media">Music on this phone</string>
+    <string name="setup_media_body">Lists your own audio files in the library.</string>
+    <string name="setup_widget">Home-screen widget</string>
+    <string name="setup_widget_body">Add the widget, then long-press it any time to restyle it.</string>
+    <string name="granted">On</string>
+    <string name="grant">Allow</string>
+    <string name="open_settings">Open</string>
+    <string name="add">Add</string>
+    <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
+    <string name="about_title">About</string>
+    <string name="about_body">The Ultimate Music Widget · v1.0\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Demo music and covers were generated for this project.</string>
+
+    <!-- Visualizer service -->
+    <string name="vis_channel">Visualizer</string>
+    <string name="vis_notification_title">Visualizer is following the music</string>
+    <string name="vis_notification_body">Audio is analysed in memory for the widget. Nothing is recorded.</string>
+
+    <!-- Editor -->
+    <string name="editor_title">Widget editor</string>
+    <string name="editor_subtitle">Live preview — this is the real widget layout.</string>
+    <string name="editor_theme">Theme</string>
+    <string name="editor_visualizer">Visualizer</string>
+    <string name="editor_show_video">Music-video chip</string>
+    <string name="editor_show_source">Source chip</string>
+    <string name="editor_show_favorite">Favorite button</string>
+    <string name="editor_save">Save widget</string>
+    <string name="editor_cancel">Cancel</string>
+    <string name="theme_cover">Album cover</string>
+    <string name="theme_dynamic">Material You</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="style_bars">Bars</string>
+    <string name="style_mirror">Mirror</string>
+    <string name="style_dots">Dots</string>
+    <string name="style_off">Off</string>
+</resources>

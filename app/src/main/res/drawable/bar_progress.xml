@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 26-30 bar: a ProgressBar whose fill is clipped vertically from the bottom. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#14FFFFFF" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip android:clipOrientation="vertical" android:gravity="bottom">
+            <shape android:shape="rectangle">
+                <corners android:radius="3dp" />
+                <solid android:color="#FFFF9F6E" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

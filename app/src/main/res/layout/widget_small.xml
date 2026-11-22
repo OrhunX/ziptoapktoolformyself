@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_bg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+
+            <FrameLayout
+                android:id="@+id/play_box"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/cd_play">
+
+                <ImageView
+                    android:id="@+id/play_circle"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/play_circle" />
+
+                <ImageView
+                    android:id="@+id/btn_play"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_play" />
+            </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:ellipsize="end"
+                android:fontFamily="@font/space_grotesk_bold"
+                android:maxLines="1"
+                android:text="@string/preview_title"
+                android:textColor="#FFF4F1EC"
+                android:textSize="13sp" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="20dp">
+
+                <LinearLayout
+                    android:id="@+id/bars"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+                <ProgressBar
+                    android:id="@+id/bar0"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="380"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar1"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="620"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar2"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="500"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar3"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="860"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar4"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="580"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar5"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="940"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar6"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="450"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar7"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="760"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar8"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="540"
+                    android:progressDrawable="@drawable/bar_progress" />
+                <ProgressBar
+                    android:id="@+id/bar9"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="1.5dp"
+                    android:layout_weight="1"
+                    android:importantForAccessibility="no"
+                    android:max="1000"
+                    android:maxHeight="400dp"
+                    android:minHeight="2dp"
+                    android:progress="900"
+                    android:progressDrawable="@drawable/bar_progress" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/vis_hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:text="@string/vis_needs_permission"
+                    android:textColor="#FFF4F1EC"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

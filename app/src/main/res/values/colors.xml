@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="night">#FF0E0C14</color>
+    <color name="paper">#FFF4F1EC</color>
+    <color name="lavender">#FFC4A8FF</color>
+    <color name="violet">#FF6B4FD8</color>
+    <color name="ember">#FFFF9F6E</color>
+    <color name="muted_light">#FFC9C3D9</color>
+    <color name="chip_spotify">#FF1ED760</color>
+    <color name="chip_youtube">#FFFF7A7A</color>
+    <color name="chip_local">#FFFFC857</color>
+    <color name="chip_other">#FF8FB8FF</color>
+    <color name="launcher_background">#FF15131D</color>
+</resources>

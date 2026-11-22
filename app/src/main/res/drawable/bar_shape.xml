@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 31+ bar: white, tinted with the album accent; height set by setViewLayoutHeight. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="3dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>
