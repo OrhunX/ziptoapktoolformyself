@@ -6,6 +6,10 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 1.6
+
+- **Every chosen song starts at 0:00.** When an app resumes a paused song from its old position (YouTube Music does this when woken from another platform), the hub seeks to the start once the song really plays, verifies 1.5 s later and repeats up to three times.
+
 ## What's new in 1.5
 
 - **Covers that stay.** Song covers are stored on the phone (one small JPEG per song in `files/art`, keyed by normalized title + artist): captured from the playing app once the cover is stable, read from local files, and fetched from Spotify's Web API for Spotify songs (exact id → `/v1/tracks`, else search). Playlist rows and the 2×2 playlist collages now show real covers even when nothing is playing; covers refresh in place without rebuilding lists.

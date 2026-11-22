@@ -68,6 +68,8 @@ object HubController {
     private const val TAKEOVER_GRACE_MS = 4_000L
     private const val RESUME_SLACK_MS = 3_000L
     private const val ART_STABLE_MS = 2_500L
+    private const val MAX_RESTARTS = 3
+    private const val RESTART_VERIFY_MS = 1_500L
     private const val MAX_SPOTIFY_LOOKUPS = 150
 
     val scope: CoroutineScope = MainScope()
@@ -141,6 +143,9 @@ object HubController {
         var viaSpotifySdk = false
         /** We already made sure the requested song started from the beginning. */
         var restartChecked = false
+        /** Seeks to the start sent for this song, and when the last one was sent. */
+        var restartAttempts = 0
+        var lastRestartAt = 0L
         var queue: List<QueueEntry> = buildQueue()
             private set
 
@@ -464,6 +469,8 @@ object HubController {
         s.waitingForTap = false
         s.returnToApp = false
         s.restartChecked = false
+        s.restartAttempts = 0
+        s.lastRestartAt = 0L
         s.viaSpotifySdk = false
         HubNotifications.cancelContinue(app)
         val entry = s.entry
@@ -628,23 +635,38 @@ object HubController {
     }
 
     /**
-     * A chosen song always starts from the beginning, even when it is the song the app had
-     * paused (apps often just resume it). The position is compared with the time since we
+     * A chosen song always starts from the beginning, even when the app resumes the song it had
+     * paused (YouTube Music does this when it is woken up with a paused song). The seek is sent
+     * only once the song really plays (apps drop seeks while loading), and checked again a
+     * moment later: up to [MAX_RESTARTS] seeks. The position is compared with the time since we
      * asked, so a song that legitimately started a few seconds ago is left alone.
      */
     private fun ensureFromStart(s: ActiveSession, controller: PlatformController) {
         if (s.restartChecked) return
         val state = controller.playbackState ?: return
-        s.restartChecked = true
+        if (state.state != PlaybackState.STATE_PLAYING) return // called again once it plays
         val now = SystemClock.elapsedRealtime()
         var position = state.position
-        if (state.state == PlaybackState.STATE_PLAYING && state.lastPositionUpdateTime > 0L) {
+        if (state.lastPositionUpdateTime > 0L) {
             position += ((now - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
         }
-        val sinceRequest = now - s.startedAt
-        if (position > sinceRequest + RESUME_SLACK_MS) {
-            if (s.viaSpotifySdk) SpotifyLink.seekToStart() else controller.transportControls.seekTo(0L)
+        val since = now - if (s.restartAttempts == 0) s.startedAt else s.lastRestartAt
+        if (position <= since + RESUME_SLACK_MS) {
+            s.restartChecked = true // playing from the start
+            return
         }
+        if (s.restartAttempts >= MAX_RESTARTS) {
+            s.restartChecked = true // the app refuses; leave it
+            return
+        }
+        s.restartAttempts++
+        s.lastRestartAt = now
+        if (s.viaSpotifySdk) SpotifyLink.seekToStart() else controller.transportControls.seekTo(0L)
+        val generation = s.generation
+        handler.postDelayed({
+            val cur = session
+            if (cur === s && cur.generation == generation) externalController?.let { ensureFromStart(cur, it) }
+        }, RESTART_VERIFY_MS)
     }
 
     /**
@@ -992,8 +1014,8 @@ object HubController {
                 snapshot.track?.title, snapshot.isPlaying, now,
                 positionMs = snapshot.positionAt(now), durationMs = snapshot.track?.durationMs ?: 0L,
             )
+            if (watch.isArmed) externalController?.let { ensureFromStart(s, it) }
             if (!wasArmed && watch.isArmed) {
-                externalController?.let { ensureFromStart(s, it) }
                 HubNotifications.cancelContinue(app)
                 if (s.returnToApp) {
                     // The song plays in the other app now; control stays with the hub.
