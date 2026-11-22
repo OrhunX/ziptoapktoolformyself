@@ -26,9 +26,19 @@ import com.sen0413.ultimatewidget.hub.KnownApps
  */
 object Ink {
     const val NIGHT = 0xFF0E0C14.toInt()
-    const val SURFACE = 0x14FFFFFF          // glass card fill on the ambient background
-    const val SURFACE_STRONG = 0x24FFFFFF
-    const val STROKE = 0x1FFFFFFF
+    // Card fills on the ambient background; brighter in the Glass appearance (see Appearance).
+    var SURFACE = 0x14FFFFFF
+        private set
+    var SURFACE_STRONG = 0x24FFFFFF
+        private set
+    var STROKE = 0x1FFFFFFF
+        private set
+
+    internal fun useGlass(glass: Boolean) {
+        SURFACE = if (glass) 0x2BFFFFFF else 0x14FFFFFF
+        SURFACE_STRONG = if (glass) 0x40FFFFFF else 0x24FFFFFF
+        STROKE = if (glass) 0x52FFFFFF else 0x1FFFFFFF
+    }
     const val PAPER = 0xFFF4F1EC.toInt()
     const val MIST = 0xFFC9C3D9.toInt()
     const val FAINT = 0x99C9C3D9.toInt()
@@ -42,6 +52,29 @@ object Ink {
         KnownApps.SPOTIFY -> 0xFF1ED760.toInt()
         KnownApps.YOUTUBE_MUSIC, KnownApps.YOUTUBE -> 0xFFFF7A7A.toInt()
         else -> 0xFF8FB8FF.toInt()
+    }
+}
+
+/**
+ * App-wide look: "Night" (default) or "Glass", an iOS-like frosted look in which the backdrop
+ * is blurred (Android 12+) and cards become brighter, translucent panes with a light edge.
+ * Read once per activity in onCreate; changing it recreates the activity.
+ */
+object Appearance {
+    private const val PREFS = "appearance"
+    private const val KEY_GLASS = "glass"
+
+    var glass: Boolean = false
+        private set
+
+    fun load(context: Context) {
+        glass = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_GLASS, false)
+        Ink.useGlass(glass)
+    }
+
+    fun setGlass(context: Context, value: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_GLASS, value).apply()
+        load(context)
     }
 }
 

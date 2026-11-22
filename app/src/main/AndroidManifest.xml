@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Lock-screen player and cross-app playlists: lets the hub show its player over the
+         lock screen and open Spotify / YouTube Music for the next song while in the background. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Visualizer: the Visualizer API requires RECORD_AUDIO; the output mix (session 0)
          also needs MODIFY_AUDIO_SETTINGS. Audio is analysed in memory only, never stored.
          FOREGROUND_SERVICE_MICROPHONE keeps the analysis alive for the home-screen widget. -->
@@ -59,6 +63,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Full-screen player shown over the lock screen; minimizes to the small media card -->
+        <activity
+            android:name=".ui.LockPlayerActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.sen0413.ultimatewidget.lockplayer" />
 
         <!-- Widget editor: opens when the widget is added and again via long-press (reconfigurable) -->
         <activity

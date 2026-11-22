@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Ultimate Widget</string>
+    <string name="app_name">Ultimate Music Widget</string>
     <string name="widget_label">Ultimate Music Widget</string>
     <string name="widget_description">One widget for every music app, with a visualizer that follows the real audio.</string>
     <string name="listener_label">Ultimate Widget media control</string>
@@ -103,7 +103,7 @@
     <string name="add">Add</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v1.0\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Demo music and covers were generated for this project.</string>
+    <string name="about_body">The Ultimate Music Widget · v1.1\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Demo music and covers were generated for this project.</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>
@@ -128,4 +128,44 @@
     <string name="style_mirror">Mirror</string>
     <string name="style_dots">Dots</string>
     <string name="style_off">Off</string>
+    <!-- v1.1: cross-app playlists -->
+    <string name="continue_channel">Playlist hand-offs</string>
+    <string name="continue_title">Next song plays in %1$s</string>
+    <string name="continue_body">Tap to continue with “%1$s”</string>
+    <string name="toast_allow_overlay_tip">Tip: allow “Display over other apps” in Setup so the hub can open other players by itself</string>
+    <string name="toast_song_not_found">“%1$s” did not start in %2$s, skipping to the next song</string>
+
+    <!-- v1.1: lock screen -->
+    <string name="card_channel">Now playing</string>
+    <string name="cd_play_short">Play</string>
+    <string name="cd_pause_short">Pause</string>
+    <string name="cd_minimize">Minimize to the lock-screen card</string>
+    <string name="cd_unlock">Unlock</string>
+    <string name="lock_swipe_hint">Swipe up to unlock · swipe the cover to change songs</string>
+    <string name="setup_lock">Lock-screen player</string>
+    <string name="setup_lock_body">Allow “Display over other apps” so the full-screen player can appear on the lock screen and the hub can open Spotify or YouTube Music by itself. Some phones (Xiaomi) also need “Show on lock screen”.</string>
+    <string name="setup_hide_cards">Hide other players’ cards</string>
+    <string name="setup_hide_cards_body">Turn off notifications for Spotify or YouTube Music so only our card shows on the lock screen. The music keeps playing.</string>
+    <string name="hide_cards_none">Spotify and YouTube Music are not installed</string>
+    <string name="lock_player_title">Full-screen lock-screen player</string>
+    <string name="lock_player_body">Shows the big player when you wake the phone while music plays. The ▾ button shrinks it to the small card; tap the card to open it again.</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+
+    <!-- v1.1: look and visualizer -->
+    <string name="appearance_title">Appearance</string>
+    <string name="appearance_body">Night is the classic dark look. Glass is frosted and translucent, like iOS.</string>
+    <string name="appearance_night">Night</string>
+    <string name="appearance_glass">Glass</string>
+    <string name="theme_glass">Glass</string>
+    <string name="sensitivity_title">Visualizer sensitivity</string>
+    <string name="sensitivity_body">Higher makes the bars jump more, even with quiet music.</string>
+    <string name="style_burst">Burst</string>
+    <string name="style_blob">Blob</string>
+    <string name="style_peaks">Peaks</string>
+    <string name="style_led">LED</string>
+    <string name="style_spectrum">Spectrum</string>
+    <string name="style_particles">Particles</string>
+    <string name="style_center">Center</string>
+    <string name="style_rainbow">Rainbow</string>
 </resources>

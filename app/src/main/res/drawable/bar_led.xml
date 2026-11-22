@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 31+ LED bar: white blocks with gaps, repeated down the bar's height, then tinted. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/led_tile"
+    android:tileModeX="clamp"
+    android:tileModeY="repeat" />

@@ -46,11 +46,20 @@ class ExternalTrackWatchTest {
     }
 
     @Test
-    fun acceptsASearchMissAfterTheGracePeriodSoThePlaylistNeverStalls() {
+    fun neverAcceptsADifferentSongAndReportsOverdueAfterTheGracePeriod() {
         val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0, graceMs = 10_000)
-        assertEquals(waiting, watch.onMetadata("Close Enough Radio", isPlaying = true, nowMs = 5_000))
-        assertEquals(playing, watch.onMetadata("Close Enough Radio", isPlaying = true, nowMs = 11_000))
-        assertEquals(movedOn, watch.onMetadata("Next Radio Song", isPlaying = true, nowMs = 180_000))
+        assertEquals(waiting, watch.onMetadata("Last Song The App Had Open", isPlaying = true, nowMs = 5_000))
+        assertEquals(false, watch.isOverdue(nowMs = 5_000))
+        assertEquals(waiting, watch.onMetadata("Last Song The App Had Open", isPlaying = true, nowMs = 11_000))
+        assertEquals(true, watch.isOverdue(nowMs = 11_000))
+    }
+
+    @Test
+    fun aSongStoppedAtItsEndCountsAsFinished() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = false, nowMs = 60_000, positionMs = 60_000, durationMs = 200_000))
+        assertEquals(movedOn, watch.onMetadata("Blue Hours", isPlaying = false, nowMs = 201_000, positionMs = 199_000, durationMs = 200_000))
     }
 
     @Test

@@ -59,6 +59,16 @@ class BandMapperTest {
     }
 
     @Test
+    fun aSuddenBassKickIsABeatButASteadyToneIsNot() {
+        val mapper = BandMapper(16)
+        repeat(6) { mapper.map(ByteArray(captureSize), sampleRateMilliHz) }
+        mapper.map(tone(60f), sampleRateMilliHz)
+        assertTrue("kick after silence", mapper.isBeat)
+        repeat(12) { mapper.map(tone(60f), sampleRateMilliHz) }
+        assertTrue("steady bass is not a beat", !mapper.isBeat)
+    }
+
+    @Test
     fun unknownSampleRateFallsBackTo44k() {
         val mapper = BandMapper(16, attack = 1f, decay = 1f)
         val withRate = mapper.map(tone(2_000f), sampleRateMilliHz)

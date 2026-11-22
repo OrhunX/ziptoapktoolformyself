@@ -24,10 +24,14 @@ enum class SizeClass {
     }
 }
 
-enum class ThemeMode { COVER, DYNAMIC, DARK, LIGHT }
+/** GLASS: a translucent pane with a light edge; the wallpaper shows through. */
+enum class ThemeMode { COVER, DYNAMIC, GLASS, DARK, LIGHT }
 
-/** DOTS needs API 31 (per-view margins in RemoteViews); older versions draw it as BARS. */
-enum class VisualizerStyle { BARS, MIRROR, DOTS, OFF }
+/**
+ * DOTS, LED and RAINBOW need API 31 (per-view sizes and tints in RemoteViews); older
+ * versions draw them as BARS. CENTER puts the bass in the middle and works everywhere.
+ */
+enum class VisualizerStyle { BARS, MIRROR, DOTS, LED, CENTER, RAINBOW, OFF }
 
 data class WidgetConfig(
     val theme: ThemeMode = ThemeMode.COVER,

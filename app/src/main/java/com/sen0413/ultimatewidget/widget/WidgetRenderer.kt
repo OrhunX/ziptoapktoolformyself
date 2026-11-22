@@ -114,7 +114,14 @@ object WidgetRenderer {
         if (!preview) colorsById[appWidgetId] = colors
 
         val views = RemoteViews(context.packageName, layoutFor(size))
-        views.setInt(R.id.bg, "setColorFilter", colors.background)
+        if (config.theme == ThemeMode.GLASS) {
+            // White tint keeps the pane's own alpha: a translucent fill with a brighter edge.
+            views.setImageViewResource(R.id.bg, R.drawable.widget_bg_glass)
+            views.setInt(R.id.bg, "setColorFilter", android.graphics.Color.WHITE)
+        } else {
+            views.setImageViewResource(R.id.bg, R.drawable.widget_bg)
+            views.setInt(R.id.bg, "setColorFilter", colors.background)
+        }
 
         val title = track?.title ?: context.getString(R.string.nothing_playing)
         views.setTextViewText(R.id.title, title)
@@ -170,9 +177,15 @@ object WidgetRenderer {
         }
         views.setViewVisibility(R.id.bars, View.VISIBLE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val gravity = if (config.style == VisualizerStyle.MIRROR) Gravity.CENTER_VERTICAL else Gravity.BOTTOM
-            views.setInt(R.id.bars, "setGravity", gravity)
-            for (i in 0 until barCount(size)) views.setInt(BAR_IDS[i], "setColorFilter", colors.accent)
+            val centered = config.style == VisualizerStyle.MIRROR || config.style == VisualizerStyle.CENTER
+            views.setInt(R.id.bars, "setGravity", if (centered) Gravity.CENTER_VERTICAL else Gravity.BOTTOM)
+            val count = barCount(size)
+            val shape = if (config.style == VisualizerStyle.LED) R.drawable.bar_led else R.drawable.bar_shape
+            for (i in 0 until count) {
+                views.setImageViewResource(BAR_IDS[i], shape)
+                val color = if (config.style == VisualizerStyle.RAINBOW) rainbow(colors.accent, i, count) else colors.accent
+                views.setInt(BAR_IDS[i], "setColorFilter", color)
+            }
         }
         applyBarHeights(views, size, config.style, bars)
 
@@ -196,7 +209,7 @@ object WidgetRenderer {
 
     private fun applyBarHeights(views: RemoteViews, size: SizeClass, style: VisualizerStyle, bars: FloatArray) {
         val count = barCount(size)
-        val values = resample(bars, count)
+        val values = if (style == VisualizerStyle.CENTER) centerOut(bars, count) else resample(bars, count)
         val maxDp = maxBarDp(size)
         val dots = style == VisualizerStyle.DOTS
         for (i in 0 until count) {
@@ -368,6 +381,26 @@ object WidgetRenderer {
         SizeClass.SMALL -> 18f
         SizeClass.MEDIUM -> 24f
         SizeClass.LARGE -> 48f
+    }
+
+    /** Bass in the middle, treble at both edges: a symmetric, "speaker cone" look. */
+    private fun centerOut(bars: FloatArray, count: Int): FloatArray {
+        val half = resample(bars, (count + 1) / 2)
+        val middle = (count - 1) / 2f
+        return FloatArray(count) { i ->
+            val distance = kotlin.math.abs(i - middle)
+            half[(distance - 0.5f).coerceAtLeast(0f).toInt().coerceAtMost(half.lastIndex)]
+        }
+    }
+
+    /** One color per bar, turning around the color wheel from the album accent. */
+    private fun rainbow(accent: Int, index: Int, count: Int): Int {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(accent, hsv)
+        hsv[0] = (hsv[0] + 220f * index / (count - 1).coerceAtLeast(1)) % 360f
+        hsv[1] = hsv[1].coerceIn(0.55f, 0.85f)
+        hsv[2] = hsv[2].coerceAtLeast(0.9f)
+        return android.graphics.Color.HSVToColor(hsv)
     }
 
     /** Averages [bars] into [count] buckets so every size can show its own number of bars. */

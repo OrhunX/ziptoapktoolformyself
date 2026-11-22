@@ -33,6 +33,7 @@ import com.sen0413.ultimatewidget.ui.views.ArtworkView
 import com.sen0413.ultimatewidget.ui.views.PlayPauseView
 import com.sen0413.ultimatewidget.ui.views.ScrubberView
 import com.sen0413.ultimatewidget.ui.views.VisualizerView
+import com.sen0413.ultimatewidget.visualizer.VisualizerEngine
 import com.sen0413.ultimatewidget.widget.ThemeMode
 import com.sen0413.ultimatewidget.widget.VideoLinks
 import com.sen0413.ultimatewidget.widget.WidgetTheme
@@ -164,10 +165,16 @@ class PlayerScreen(host: Host) : Screen(host) {
     }
 
     private fun styleLabel(s: VisualizerView.Style): Int = when (s) {
+        VisualizerView.Style.RING -> R.string.style_ring
+        VisualizerView.Style.BURST -> R.string.style_burst
+        VisualizerView.Style.BLOB -> R.string.style_blob
         VisualizerView.Style.BARS -> R.string.style_bars
         VisualizerView.Style.MIRROR -> R.string.style_mirror
         VisualizerView.Style.WAVE -> R.string.style_wave
-        VisualizerView.Style.RING -> R.string.style_ring
+        VisualizerView.Style.PEAKS -> R.string.style_peaks
+        VisualizerView.Style.LED -> R.string.style_led
+        VisualizerView.Style.SPECTRUM -> R.string.style_spectrum
+        VisualizerView.Style.PARTICLES -> R.string.style_particles
     }
 
     private fun selectStyle(s: VisualizerView.Style) {
@@ -177,11 +184,11 @@ class PlayerScreen(host: Host) : Screen(host) {
     }
 
     private fun applyStyle() {
-        val ringMode = style == VisualizerView.Style.RING
+        val ringMode = style.aroundArtwork
         stage.ringMode = ringMode
         ring.visibility = if (ringMode) View.VISIBLE else View.INVISIBLE
         strip.visibility = if (ringMode) View.GONE else View.VISIBLE
-        if (!ringMode) strip.style = style
+        if (ringMode) ring.style = style else strip.style = style
         styleChips.forEach { (s, chip) -> chip.setChipSelected(s == style) }
     }
 
@@ -263,7 +270,7 @@ class PlayerScreen(host: Host) : Screen(host) {
 
     override fun onBars(bars: FloatArray) {
         if (!shown) return
-        if (style == VisualizerView.Style.RING) ring.setBars(bars) else strip.setBars(bars)
+        if (style.aroundArtwork) ring.setBars(bars) else strip.setBars(bars)
         scheduleFrame()
     }
 
@@ -286,8 +293,11 @@ class PlayerScreen(host: Host) : Screen(host) {
         frameScheduled = false
         if (!shown) return@Runnable
         updateClock(force = false)
-        val bass = if (style == VisualizerView.Style.RING) ring.bassEnergy() else strip.bassEnergy()
-        val scale = 1f + 0.03f * bass
+        val bass = if (style.aroundArtwork) ring.bassEnergy() else strip.bassEnergy()
+        // The cover breathes with the bass and gives a short kick on every beat.
+        val since = SystemClock.uptimeMillis() - VisualizerEngine.lastBeatAt
+        val kick = if (since in 0..400) kotlin.math.exp(-since / 140f) else 0f
+        val scale = 1f + 0.035f * bass + 0.05f * kick
         art.scaleX = scale
         art.scaleY = scale
         host.ambient.targetEnergy = bass

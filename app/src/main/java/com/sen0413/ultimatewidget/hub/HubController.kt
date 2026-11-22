@@ -9,9 +9,12 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.app.KeyguardManager
+import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.Settings
 import android.util.Log
 import androidx.annotation.MainThread
 import androidx.core.app.NotificationManagerCompat
@@ -27,6 +30,7 @@ import com.sen0413.ultimatewidget.data.PlaylistEntry
 import com.sen0413.ultimatewidget.data.PlaylistStore
 import com.sen0413.ultimatewidget.playback.DemoLibrary
 import com.sen0413.ultimatewidget.playback.MediaItems
+import com.sen0413.ultimatewidget.ui.LockPlayerActivity
 import com.sen0413.ultimatewidget.visualizer.VisualizerEngine
 import com.sen0413.ultimatewidget.visualizer.VisualizerService
 import com.sen0413.ultimatewidget.widget.WidgetRenderer
@@ -55,6 +59,9 @@ object HubController {
     private const val TAG = "HubController"
     private const val QUEUE_WINDOW = 25
     private const val SERVICE_LINGER_MS = 120_000L
+    private const val FIRST_CHECK_MS = 2_500L
+    private const val RECHECK_MS = 2_500L
+    private const val MAX_NUDGES = 3
 
     val scope: CoroutineScope = MainScope()
 
@@ -75,6 +82,8 @@ object HubController {
     private var visualizerStatus = VisualizerStatus.IDLE
     private var notificationAccess = false
     private var screenOn = true
+    private var visibleScreens = 0
+    private var sessionGeneration = 0
 
     /** A hub playlist being played across apps, or null. */
     private var session: ActiveSession? = null
@@ -95,6 +104,13 @@ object HubController {
     private class ActiveSession(val playlist: Playlist, var index: Int) {
         var watch: ExternalTrackWatch? = null
         var localStarted = false
+        /** Bumped for every entry, so checks scheduled for an earlier entry do nothing. */
+        var generation = 0
+        var query = ""
+        var attempts = 0
+        var nudges = 0
+        /** Android blocked opening the app; we posted "tap to continue" and wait for the tap. */
+        var waitingForTap = false
         val entry: PlaylistEntry get() = playlist.entries[index]
         val queue: List<QueueEntry> = playlist.entries.mapIndexed { i, e ->
             QueueEntry(e.title, e.artist, e.sourceLabel, index = i, queueId = e.id, sourcePackage = e.sourcePackage)
@@ -113,6 +129,7 @@ object HubController {
         AudioSessionRegistry.register(app)
         registerSystemReceivers()
 
+        VisualizerEngine.loadSettings(app)
         VisualizerEngine.onFrame = { bars -> WidgetRenderer.pushBars(app, bars) }
         VisualizerEngine.onStatus = { status ->
             visualizerStatus = status
@@ -157,6 +174,11 @@ object HubController {
                 }
             }
         }
+    }
+
+    /** Explicit play or pause (lock-screen controls send these instead of a toggle). */
+    suspend fun setPlaying(play: Boolean) {
+        if (state.value.current.isPlaying != play) playPause()
     }
 
     suspend fun next() {
@@ -226,7 +248,7 @@ object HubController {
     suspend fun playLibrary(tracks: List<LocalTrack>, index: Int) {
         if (tracks.isEmpty()) return
         endSession()
-        pauseExternal()
+        pauseOthers(keepPackage = null, keepLocal = true)
         active = SourceKind.LOCAL
         publish()
         localConnection.withController { c ->
@@ -240,7 +262,14 @@ object HubController {
     /** Plays a hub playlist: each entry is played by the app it belongs to. */
     suspend fun playPlaylist(playlist: Playlist, index: Int) {
         if (playlist.entries.isEmpty()) return
+        endSession()
         session = ActiveSession(playlist, index.coerceIn(0, playlist.entries.lastIndex))
+        // Apps that are closed can only be opened by us while we are visible, or with the
+        // "display over other apps" permission; say so once instead of stalling later.
+        val closed = playlist.entries.mapNotNull { it.sourcePackage }.distinct().filter { sessions.controllerFor(it) == null }
+        if (closed.isNotEmpty() && !Settings.canDrawOverlays(app)) {
+            _messages.tryEmit(app.getString(R.string.toast_allow_overlay_tip))
+        }
         playEntry(session!!.index)
     }
 
@@ -289,8 +318,13 @@ object HubController {
             return
         }
         s.index = index
+        s.generation = ++sessionGeneration
         s.localStarted = false
         s.watch = null
+        s.attempts = 0
+        s.nudges = 0
+        s.waitingForTap = false
+        HubNotifications.cancelContinue(app)
         val entry = s.entry
 
         if (entry.isLocal) {
@@ -300,7 +334,7 @@ object HubController {
                 return
             }
             sessions.preferredPackage = null
-            pauseExternal()
+            pauseOthers(keepPackage = null, keepLocal = true)
             active = SourceKind.LOCAL
             publish()
             val track = library.tracks.value.firstOrNull { it.uri == uri }
@@ -312,21 +346,105 @@ object HubController {
                 c.play()
             }
         } else {
-            val pkg = entry.sourcePackage ?: return
-            pauseLocal()
+            val pkg = entry.sourcePackage ?: return advance()
+            // Stop everything else first: two apps playing at once is what made the hub lose track.
+            pauseOthers(keepPackage = pkg, keepLocal = false)
             active = SourceKind.EXTERNAL
             sessions.preferredPackage = pkg
             s.watch = ExternalTrackWatch(entry.title, SystemClock.elapsedRealtime())
-            val query = listOf(entry.title, entry.artist).filter { it.isNotBlank() }.joinToString(" ")
-            val controller = sessions.controllerFor(pkg)
-            if (controller != null) {
-                // The same request Assistant and Android Auto send to a media app.
-                controller.transportControls.playFromSearch(query, null)
-            } else if (!launchPlayFromSearch(pkg, entry, query)) {
-                _messages.tryEmit(app.getString(R.string.toast_app_not_running, entry.sourceLabel))
-            }
+            s.query = listOf(entry.title, entry.artist).filter { it.isNotBlank() }.joinToString(" ")
+            requestExternal(s)
+            scheduleCheck(s.generation, FIRST_CHECK_MS)
             publish()
         }
+    }
+
+    /**
+     * Asks the entry's app to play it. First through its live session (no app switch),
+     * then through the app's own "play from search" activity, which Spotify and YouTube Music
+     * handle more reliably. If Android does not let us open the app right now, a notification
+     * offers the user a one-tap continue.
+     */
+    private fun requestExternal(s: ActiveSession) {
+        val entry = s.entry
+        val pkg = entry.sourcePackage ?: return
+        s.attempts++
+        val controller = sessions.controllerFor(pkg)
+        if (controller != null && s.attempts == 1) {
+            controller.transportControls.playFromSearch(s.query, searchExtras(entry))
+            return
+        }
+        if (canStartActivities() && launchPlayFromSearch(pkg, entry, s.query)) return
+        if (controller != null) {
+            controller.transportControls.playFromSearch(s.query, searchExtras(entry))
+            return
+        }
+        if (HubNotifications.showContinue(app, entry.sourceLabel, entry.title, playFromSearchIntent(pkg, entry, s.query))) {
+            s.waitingForTap = true
+        } else {
+            _messages.tryEmit(app.getString(R.string.toast_app_not_running, entry.sourceLabel))
+        }
+    }
+
+    private fun scheduleCheck(generation: Int, delayMs: Long) {
+        handler.postDelayed({ scope.launch { checkExternal(generation) } }, delayMs)
+    }
+
+    /** Makes sure the requested song really plays: nudges, retries, and skips on a miss. */
+    private suspend fun checkExternal(generation: Int) {
+        val s = session ?: return
+        if (s.generation != generation || s.entry.isLocal) return
+        val watch = s.watch ?: return
+        val pkg = s.entry.sourcePackage ?: return
+        val controller = sessions.controllerFor(pkg)
+        val now = SystemClock.elapsedRealtime()
+
+        if (controller != null && s.waitingForTap) {
+            // The user tapped "continue": the app is up now, give it a fresh grace period.
+            s.waitingForTap = false
+            s.watch = ExternalTrackWatch(s.entry.title, now)
+            HubNotifications.cancelContinue(app)
+            scheduleCheck(generation, RECHECK_MS)
+            return
+        }
+        if (s.waitingForTap) {
+            scheduleCheck(generation, RECHECK_MS * 2)
+            return
+        }
+
+        val playing = controller?.playbackState?.state == PlaybackState.STATE_PLAYING
+        val title = controller?.metadata?.getString(PlatformMetadata.METADATA_KEY_TITLE)
+        if (watch.isArmed) {
+            // Right song; some apps load it paused. Start it once, then leave it to the user.
+            if (!playing && s.nudges == 0) {
+                s.nudges++
+                controller?.transportControls?.play()
+            }
+            return
+        }
+        if (controller != null && watch.matches(title)) {
+            if (!playing && s.nudges < MAX_NUDGES) {
+                s.nudges++
+                controller.transportControls.play()
+            }
+            refreshExternal()
+            if (s.watch?.isArmed != true) scheduleCheck(generation, RECHECK_MS)
+            return
+        }
+        if (s.watch?.isOverdue(now) == true) {
+            // Never play a different song in its place: say so and move on.
+            _messages.tryEmit(app.getString(R.string.toast_song_not_found, s.entry.title, s.entry.sourceLabel))
+            controller?.transportControls?.pause()
+            advance()
+            return
+        }
+        if (s.attempts < 2) {
+            requestExternal(s)
+        } else if (controller != null && !playing && s.nudges < MAX_NUDGES) {
+            s.nudges++
+            controller.transportControls.play()
+        }
+        scheduleCheck(generation, RECHECK_MS)
     }
 
     private suspend fun advance() {
@@ -342,32 +460,57 @@ object HubController {
     private fun endSession() {
         if (session == null) return
         session = null
+        sessionGeneration++
         sessions.preferredPackage = null
+        HubNotifications.cancelContinue(app)
     }
 
-    /** Fallback when the app has no live session: ask it to open and play the song. */
-    private fun launchPlayFromSearch(pkg: String, entry: PlaylistEntry, query: String): Boolean = try {
-        val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+    private fun searchExtras(entry: PlaylistEntry) = Bundle().apply {
+        putString(MediaStore.EXTRA_MEDIA_FOCUS, MediaStore.Audio.Media.ENTRY_CONTENT_TYPE)
+        putString(MediaStore.EXTRA_MEDIA_TITLE, entry.title)
+        putString(MediaStore.EXTRA_MEDIA_ARTIST, entry.artist)
+    }
+
+    private fun playFromSearchIntent(pkg: String, entry: PlaylistEntry, query: String): Intent =
+        Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
             .setPackage(pkg)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(SearchManager.QUERY, query)
-            .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, MediaStore.Audio.Media.ENTRY_CONTENT_TYPE)
-            .putExtra(MediaStore.EXTRA_MEDIA_TITLE, entry.title)
-            .putExtra(MediaStore.EXTRA_MEDIA_ARTIST, entry.artist)
-        app.startActivity(intent)
+            .putExtras(searchExtras(entry))
+
+    /** Opens the app on its own search-and-play screen; Spotify and YouTube Music start the top result. */
+    private fun launchPlayFromSearch(pkg: String, entry: PlaylistEntry, query: String): Boolean = try {
+        app.startActivity(playFromSearchIntent(pkg, entry, query))
         true
     } catch (t: Throwable) {
         Log.i(TAG, "Could not launch $pkg: ${t.javaClass.simpleName}")
         false
     }
 
+    /** Android lets us open another app only while we are on screen, or with the overlay permission. */
+    private fun canStartActivities(): Boolean = visibleScreens > 0 || Settings.canDrawOverlays(app)
+
+    /** Called by our activities from onStart/onStop. */
+    fun onScreenVisible(visible: Boolean) {
+        visibleScreens = (visibleScreens + if (visible) 1 else -1).coerceAtLeast(0)
+    }
+
     private suspend fun pauseLocal() {
         if (local.isPlaying) localConnection.withController { it.pause() }
     }
 
-    private fun pauseExternal() {
-        val c = externalController ?: return
-        if (c.playbackState?.state == PlaybackState.STATE_PLAYING) c.transportControls.pause()
+    /** Pauses every source except the one about to play, so only one app ever sounds. */
+    private suspend fun pauseOthers(keepPackage: String?, keepLocal: Boolean) {
+        if (!keepLocal) pauseLocal()
+        if (!notificationAccess) return
+        for (c in sessions.otherSessions()) {
+            if (c.packageName == keepPackage) continue
+            when (c.playbackState?.state) {
+                PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING ->
+                    c.transportControls.pause()
+                else -> Unit
+            }
+        }
     }
 
     // ---------------------------------------------------------------- inputs
@@ -513,7 +656,13 @@ object HubController {
         val s = session
         val watch = s?.watch
         if (s != null && watch != null && snapshot != null && snapshot.packageName == s.entry.sourcePackage) {
-            val result = watch.onMetadata(snapshot.track?.title, snapshot.isPlaying, SystemClock.elapsedRealtime())
+            val now = SystemClock.elapsedRealtime()
+            val wasArmed = watch.isArmed
+            val result = watch.onMetadata(
+                snapshot.track?.title, snapshot.isPlaying, now,
+                positionMs = snapshot.positionAt(now), durationMs = snapshot.track?.durationMs ?: 0L,
+            )
+            if (!wasArmed && watch.isArmed) HubNotifications.cancelContinue(app)
             if (result == ExternalTrackWatch.Result.MOVED_ON) {
                 s.watch = null
                 externalController?.transportControls?.pause()
@@ -568,6 +717,7 @@ object HubController {
         if (renderKey != lastRenderKey) {
             lastRenderKey = renderKey
             WidgetRenderer.renderAll(app, s)
+            LockScreenCard.update(app, s)
         }
 
         val queueKey = Triple(s.session?.playlistId, s.queue.map { it.queueId to it.title }, s.queueIndex)
@@ -619,14 +769,35 @@ object HubController {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
-                    Intent.ACTION_SCREEN_ON -> screenOn = true
-                    Intent.ACTION_SCREEN_OFF -> screenOn = false
+                    Intent.ACTION_SCREEN_ON -> {
+                        screenOn = true
+                        maybeShowLockPlayer(screenTurnedOff = false)
+                    }
+                    Intent.ACTION_SCREEN_OFF -> {
+                        screenOn = false
+                        maybeShowLockPlayer(screenTurnedOff = true)
+                    }
                 }
                 publish()
             }
         }
         // System broadcasts are still delivered to non-exported receivers.
         ContextCompat.registerReceiver(app, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    /**
+     * The full-screen lock player: started as the screen turns off (so it is already there
+     * when the phone wakes up) or on wake-up if music started meanwhile.
+     */
+    private fun maybeShowLockPlayer(screenTurnedOff: Boolean) {
+        if (!LockPlayerActivity.isEnabled(app) || !Settings.canDrawOverlays(app)) return
+        if (!_state.value.current.isPlaying) return
+        if (!screenTurnedOff) {
+            val locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+            if (!locked || LockPlayerActivity.isShowing) return
+        }
+        runCatching { app.startActivity(LockPlayerActivity.intent(app)) }
+            .onFailure { Log.i(TAG, "Lock player not started: ${it.javaClass.simpleName}") }
     }
 
     private fun powerSave(): Boolean = app.getSystemService(PowerManager::class.java).isPowerSaveMode

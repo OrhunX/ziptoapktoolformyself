@@ -56,6 +56,10 @@ class ExternalSessionWatcher(
     fun controllerFor(packageName: String): PlatformController? =
         activeSessions().firstOrNull { it.packageName == packageName }
 
+    /** Every other app's live session (never our own), for pausing them all at once. */
+    fun otherSessions(): List<PlatformController> =
+        activeSessions().filter { it.packageName != context.packageName }
+
     private fun activeSessions(): List<PlatformController> = try {
         manager.getActiveSessions(listenerComponent)
     } catch (e: SecurityException) {

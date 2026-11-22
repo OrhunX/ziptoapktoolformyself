@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glass pane: translucent fill, a brighter edge and a soft highlight at the top.
+     The widget tints it white with SRC_ATOP, which keeps these alpha values. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="28dp" />
+            <solid android:color="#30FFFFFF" />
+            <stroke android:width="1dp" android:color="#70FFFFFF" />
+        </shape>
+    </item>
+    <item android:bottom="40dp">
+        <shape android:shape="rectangle">
+            <corners android:topLeftRadius="28dp" android:topRightRadius="28dp" />
+            <gradient android:angle="270" android:startColor="#22FFFFFF" android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

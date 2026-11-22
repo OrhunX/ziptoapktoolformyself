@@ -28,6 +28,7 @@ import com.sen0413.ultimatewidget.R
 import com.sen0413.ultimatewidget.data.EntryDraft
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.HubState
+import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.add
 import com.sen0413.ultimatewidget.ui.kit.column
 import com.sen0413.ultimatewidget.ui.kit.dp
@@ -63,6 +64,7 @@ class MainActivity : Activity(), Host {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Appearance.load(this)
         drawEdgeToEdge()
 
         ambient = AmbientBackgroundView(this)
@@ -105,6 +107,10 @@ class MainActivity : Activity(), Host {
     }
 
     private fun handleIntent(intent: Intent?) {
+        intent?.getStringExtra(EXTRA_TAB)?.let { name ->
+            intent.removeExtra(EXTRA_TAB)
+            runCatching { Tab.valueOf(name) }.getOrNull()?.let { open(it) }
+        }
         if (intent?.getBooleanExtra(EXTRA_REQUEST_MIC, false) == true) {
             intent.removeExtra(EXTRA_REQUEST_MIC)
             if (!VisualizerEngine.hasPermission(this)) requestMicrophone()
@@ -118,6 +124,7 @@ class MainActivity : Activity(), Host {
 
     override fun onStart() {
         super.onStart()
+        HubController.onScreenVisible(true)
         val scope = MainScope()
         uiScope = scope
         scope.launch { HubController.state.collect { render(it) } }
@@ -145,6 +152,7 @@ class MainActivity : Activity(), Host {
     override fun onStop() {
         uiScope?.cancel()
         uiScope = null
+        HubController.onScreenVisible(false)
         super.onStop()
     }
 
@@ -352,6 +360,7 @@ class MainActivity : Activity(), Host {
 
     companion object {
         const val EXTRA_REQUEST_MIC = "com.sen0413.ultimatewidget.extra.REQUEST_MIC"
+        const val EXTRA_TAB = "com.sen0413.ultimatewidget.extra.TAB"
         private const val STATE_TAB = "tab"
         private const val REQUEST_PERMISSION = 41
     }

@@ -31,6 +31,8 @@ object VisualizerEngine {
     private const val SILENCE_ENERGY = 1.5f
     private const val SILENCE_TIMEOUT_MS = 4_000L
     private const val MAX_RATE_MILLIHZ = 20_000
+    private const val PREFS = "visualizer"
+    private const val KEY_GAIN = "gain"
 
     private var visualizer: Visualizer? = null
     private var sessionId: Int? = null
@@ -42,6 +44,27 @@ object VisualizerEngine {
     /** Frames pushed to the widget per second; lowered to 10 in Battery Saver. */
     @Volatile
     var targetFps: Int = 18
+
+    /** Sensitivity chosen in Setup (0.5..2.5); applied to the band mapper. */
+    var gain: Float
+        get() = mapper.gain
+        set(value) {
+            mapper.gain = value
+        }
+
+    /** SystemClock.uptimeMillis() of the last bass kick; views pulse with it. */
+    @Volatile
+    var lastBeatAt: Long = 0L
+        private set
+
+    fun loadSettings(context: Context) {
+        gain = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getFloat(KEY_GAIN, 1.3f)
+    }
+
+    fun saveGain(context: Context, value: Float) {
+        gain = value
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putFloat(KEY_GAIN, value).apply()
+    }
 
     var onFrame: ((FloatArray) -> Unit)? = null
     var onStatus: ((VisualizerStatus) -> Unit)? = null
@@ -117,6 +140,7 @@ object VisualizerEngine {
             if (fft == null) return
             val now = SystemClock.elapsedRealtime()
             val bands = mapper.map(fft, samplingRate)
+            if (mapper.isBeat) lastBeatAt = SystemClock.uptimeMillis()
 
             if (mapper.lastEnergy > SILENCE_ENERGY) {
                 lastSoundAt = now

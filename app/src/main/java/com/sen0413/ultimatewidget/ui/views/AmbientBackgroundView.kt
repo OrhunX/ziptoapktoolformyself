@@ -6,11 +6,14 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RadialGradient
+import android.graphics.RenderEffect
 import android.graphics.Shader
+import android.os.Build
 import android.os.SystemClock
 import android.view.View
 import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
+import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import kotlin.math.cos
 import kotlin.math.min
@@ -56,6 +59,16 @@ class AmbientBackgroundView(context: Context) : View(context) {
     /** 0..1 bass energy from the visualizer. */
     var targetEnergy: Float = 0f
 
+    /** Glass appearance: vivid fields under a strong blur, the frosted pane behind the cards. */
+    private val glass = Appearance.glass
+    private val fieldAlpha = if (glass) 185 else 120
+
+    init {
+        if (glass && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            setRenderEffect(RenderEffect.createBlurEffect(90f, 90f, Shader.TileMode.CLAMP))
+        }
+    }
+
     fun setColors(@ColorInt primary: Int, @ColorInt secondary: Int, @ColorInt deep: Int) {
         blobs[0].target = primary
         blobs[1].target = secondary
@@ -83,13 +96,13 @@ class AmbientBackgroundView(context: Context) : View(context) {
                 blob.shaderColor = blob.color
                 blob.shader = RadialGradient(
                     0f, 0f, 1f,
-                    intArrayOf(ColorUtils.setAlphaComponent(blob.color, 120), ColorUtils.setAlphaComponent(blob.color, 0)),
+                    intArrayOf(ColorUtils.setAlphaComponent(blob.color, fieldAlpha), ColorUtils.setAlphaComponent(blob.color, 0)),
                     null, Shader.TileMode.CLAMP,
                 )
             }
             val cx = w * (0.5f + 0.42f * sin(time * blob.speed + blob.phaseX))
             val cy = h * (0.42f + 0.36f * cos(time * blob.speed * 0.8f + blob.phaseY))
-            val radius = base * blob.size * (1f + 0.10f * energy)
+            val radius = base * blob.size * (1f + (if (glass) 0.16f else 0.10f) * energy)
             paint.shader = blob.shader
             canvas.save()
             canvas.translate(cx, cy)

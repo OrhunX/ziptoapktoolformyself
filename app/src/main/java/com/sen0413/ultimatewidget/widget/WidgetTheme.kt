@@ -38,6 +38,14 @@ object WidgetTheme {
         ThemeMode.LIGHT -> LIGHT
         ThemeMode.DYNAMIC -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamic(context) else DARK
         ThemeMode.COVER -> fromCover(context, source)
+        ThemeMode.GLASS -> glass(context, source)
+    }
+
+    /** Glass: light text on a translucent pane; the accent still comes from the cover. */
+    private fun glass(context: Context, source: SourceSnapshot): WidgetColors {
+        val accent = fromCover(context, source).accent
+        val brightAccent = if (android.graphics.Color.luminance(accent) < 0.25f) ColorUtils.blendARGB(accent, PAPER, 0.45f) else accent
+        return WidgetColors(NIGHT, PAPER, 0xFFE4E0EC.toInt(), brightAccent)
     }
 
     @RequiresApi(Build.VERSION_CODES.S)

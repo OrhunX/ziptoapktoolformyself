@@ -50,6 +50,7 @@ class WidgetConfigActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.sen0413.ultimatewidget.ui.kit.Appearance.load(this)
         appWidgetId = intent?.extras?.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
         // If the user backs out, the launcher must not add the widget.
@@ -65,7 +66,11 @@ class WidgetConfigActivity : Activity() {
 
     private fun buildContent(): View {
         preview = FrameLayout(this).apply {
-            background = rounded(0x14FFFFFF, dp(28f))
+            // A wallpaper-like gradient, so the Glass theme shows what it really looks like.
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF3A2E5C.toInt(), 0xFF6B4FD8.toInt(), 0xFFFF9F6E.toInt()),
+            ).apply { cornerRadius = dp(28f) }
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
         val body = column {
@@ -164,6 +169,7 @@ class WidgetConfigActivity : Activity() {
     private fun themeLabel(mode: ThemeMode): Int = when (mode) {
         ThemeMode.COVER -> R.string.theme_cover
         ThemeMode.DYNAMIC -> R.string.theme_dynamic
+        ThemeMode.GLASS -> R.string.theme_glass
         ThemeMode.DARK -> R.string.theme_dark
         ThemeMode.LIGHT -> R.string.theme_light
     }
@@ -172,6 +178,9 @@ class WidgetConfigActivity : Activity() {
         VisualizerStyle.BARS -> R.string.style_bars
         VisualizerStyle.MIRROR -> R.string.style_mirror
         VisualizerStyle.DOTS -> R.string.style_dots
+        VisualizerStyle.LED -> R.string.style_led
+        VisualizerStyle.CENTER -> R.string.style_center
+        VisualizerStyle.RAINBOW -> R.string.style_rainbow
         VisualizerStyle.OFF -> R.string.style_off
     }
 

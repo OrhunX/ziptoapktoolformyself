@@ -15,7 +15,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.sen0413.ultimatewidget.hub.HubAudio
 import com.sen0413.ultimatewidget.hub.HubController
-import com.sen0413.ultimatewidget.ui.MainActivity
+import com.sen0413.ultimatewidget.ui.LockPlayerActivity
 
 /**
  * Our own player: ExoPlayer behind a Media3 MediaSession. Media3 keeps the notification,
@@ -52,8 +52,9 @@ class PlaybackService : MediaSessionService() {
             }
         })
 
+        // Tapping our card opens the full-screen player on the lock screen, the app otherwise.
         val openApp = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
+            this, 0, LockPlayerActivity.intent(this, fromCard = true),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         session = MediaSession.Builder(this, player)

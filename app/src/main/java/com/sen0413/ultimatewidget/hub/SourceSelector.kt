@@ -25,31 +25,50 @@ object SourceSelector {
 /**
  * Detects that an external app finished the song the hub asked for, so a hub playlist can
  * move on. Other apps do not tell us "the song ended"; we watch their metadata instead:
- * once the requested title has been seen ("armed"), a different title means the app moved on.
+ *  - the watch arms only when the requested title is actually playing (a different song,
+ *    such as the one the app last had open, is never accepted as the requested one);
+ *  - once armed, a different title, or the same song stopped at its very end, means done;
+ *  - [isOverdue] tells the hub that the requested song never started, so it can retry or skip.
  */
 class ExternalTrackWatch(
     private val expectedTitle: String,
     private val startedAtMs: Long,
-    private val graceMs: Long = 12_000L,
+    private val graceMs: Long = 15_000L,
 ) {
     private var armedTitle: String? = null
 
     enum class Result { WAITING, PLAYING_EXPECTED, MOVED_ON }
 
-    fun onMetadata(title: String?, isPlaying: Boolean, nowMs: Long): Result {
-        if (title.isNullOrBlank()) return if (armedTitle == null) Result.WAITING else Result.PLAYING_EXPECTED
+    val isArmed: Boolean get() = armedTitle != null
+
+    fun matches(title: String?): Boolean = !title.isNullOrBlank() && TrackMatcher.sameTitle(expectedTitle, title)
+
+    fun onMetadata(
+        title: String?,
+        isPlaying: Boolean,
+        nowMs: Long,
+        positionMs: Long = 0L,
+        durationMs: Long = 0L,
+    ): Result {
         val armed = armedTitle
         if (armed == null) {
-            if (!isPlaying) return Result.WAITING
-            val matches = TrackMatcher.sameTitle(expectedTitle, title)
-            // If the app played something else (search miss), accept it after a grace period
-            // so the playlist never stalls on one entry.
-            if (matches || nowMs - startedAtMs > graceMs) {
+            if (isPlaying && matches(title)) {
                 armedTitle = title
                 return Result.PLAYING_EXPECTED
             }
             return Result.WAITING
         }
-        return if (title == armed) Result.PLAYING_EXPECTED else Result.MOVED_ON
+        if (title.isNullOrBlank()) return Result.PLAYING_EXPECTED
+        if (title != armed) return Result.MOVED_ON
+        // Some apps stop on the last second instead of moving to another song.
+        if (!isPlaying && durationMs > 0L && positionMs >= durationMs - END_SLACK_MS) return Result.MOVED_ON
+        return Result.PLAYING_EXPECTED
+    }
+
+    /** True when the requested song has not started within the grace period. */
+    fun isOverdue(nowMs: Long): Boolean = armedTitle == null && nowMs - startedAtMs > graceMs
+
+    companion object {
+        const val END_SLACK_MS = 2_500L
     }
 }
