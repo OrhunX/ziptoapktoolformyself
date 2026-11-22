@@ -61,7 +61,7 @@ class PlaylistCover(context: Context) : View(context) {
         val entries = playlist.entries.take(4)
         job = HubController.scope.launch {
             val loadedPhoto = path?.let { withContext(Dispatchers.IO) { BitmapFactory.decodeFile(it) } }
-            val loadedTiles = if (loadedPhoto == null && emoji.isEmpty()) entries.map { artFor(context, it) } else emptyList()
+            val loadedTiles = if (loadedPhoto == null && emoji.isEmpty()) entries.map { thumbnail(artFor(context, it), TILE_PX) } else emptyList()
             photo = loadedPhoto
             tiles = loadedTiles
             invalidate()
@@ -127,6 +127,12 @@ class PlaylistCover(context: Context) : View(context) {
     }
 
     companion object {
+        private const val TILE_PX = 160
+
+        /** A small copy for lists, so long playlists never hold dozens of full-size covers. */
+        fun thumbnail(bitmap: Bitmap, px: Int): Bitmap =
+            if (bitmap.width <= px && bitmap.height <= px) bitmap else Bitmap.createScaledBitmap(bitmap, px, px, true)
+
         /** Cover art for one playlist song: the file's own art, a bundled cover or a generated one. */
         suspend fun artFor(context: Context, entry: PlaylistEntry): Bitmap {
             val track = if (entry.isLocal) HubController.library.tracks.value.firstOrNull { it.uri == entry.mediaUri } else null

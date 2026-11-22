@@ -726,7 +726,9 @@ class PlaylistsScreen(host: Host) : Screen(host) {
                 }
             }
             setOnClickListener { play(index, shuffled = false) }
-            HubController.scope.launch { art.setImageBitmap(PlaylistCover.artFor(context, entry)) }
+            HubController.scope.launch {
+                art.setImageBitmap(PlaylistCover.thumbnail(PlaylistCover.artFor(context, entry), context.dp(46)))
+            }
         }
 
         fun setCurrent(current: Boolean) {
