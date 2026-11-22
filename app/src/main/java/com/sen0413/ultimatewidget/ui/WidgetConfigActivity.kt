@@ -26,6 +26,7 @@ import com.sen0413.ultimatewidget.ui.kit.rounded
 import com.sen0413.ultimatewidget.ui.kit.row
 import com.sen0413.ultimatewidget.ui.kit.setChipSelected
 import com.sen0413.ultimatewidget.widget.SizeClass
+import com.sen0413.ultimatewidget.ui.views.ColorPicker
 import com.sen0413.ultimatewidget.widget.ThemeMode
 import com.sen0413.ultimatewidget.widget.VisualizerStyle
 import com.sen0413.ultimatewidget.widget.WidgetConfig
@@ -44,6 +45,9 @@ class WidgetConfigActivity : Activity() {
 
     private val themeChips = LinkedHashMap<ThemeMode, TextView>()
     private val styleChips = LinkedHashMap<VisualizerStyle, TextView>()
+    private lateinit var customBackground: TextView
+    private lateinit var customAccent: TextView
+    private lateinit var customRow: View
     private lateinit var videoChip: TextView
     private lateinit var sourceChip: TextView
     private lateinit var favoriteChip: TextView
@@ -87,6 +91,23 @@ class WidgetConfigActivity : Activity() {
                     add(chip, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = if (i > 0) dp(8) else 0)
                 }
             }, top = dp(10))
+
+            // Custom theme: the user's own background (with transparency) and bar colors.
+            customBackground = chip(getString(R.string.custom_background)) {
+                ColorPicker.show(this@WidgetConfigActivity, getString(R.string.custom_background), config.customBackground, true) {
+                    update(config.copy(theme = ThemeMode.CUSTOM, customBackground = it))
+                }
+            }
+            customAccent = chip(getString(R.string.custom_bars)) {
+                ColorPicker.show(this@WidgetConfigActivity, getString(R.string.custom_bars), config.customAccent, false) {
+                    update(config.copy(theme = ThemeMode.CUSTOM, customAccent = it))
+                }
+            }
+            customRow = scrollRow {
+                add(customBackground, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+                add(customAccent, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
+            }
+            add(customRow, top = dp(10))
 
             add(label(getString(R.string.editor_visualizer), TextRole.HEADING), top = dp(20))
             add(scrollRow {
@@ -139,6 +160,13 @@ class WidgetConfigActivity : Activity() {
     /** Reflects [config] in the chips and re-inflates the real widget layout as the preview. */
     private fun sync() {
         themeChips.forEach { (mode, chip) -> chip.setChipSelected(mode == config.theme) }
+        customRow.visibility = if (config.theme == ThemeMode.CUSTOM) View.VISIBLE else View.GONE
+        listOf(customBackground to config.customBackground, customAccent to config.customAccent).forEach { (chip, color) ->
+            chip.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                ColorPicker.swatch(this, color).apply { setSize(dp(16), dp(16)) }, null, null, null,
+            )
+            chip.compoundDrawablePadding = dp(8)
+        }
         styleChips.forEach { (style, chip) -> chip.setChipSelected(style == config.style) }
         videoChip.setChipSelected(config.showVideo)
         sourceChip.setChipSelected(config.showSource)
@@ -170,6 +198,7 @@ class WidgetConfigActivity : Activity() {
         ThemeMode.COVER -> R.string.theme_cover
         ThemeMode.DYNAMIC -> R.string.theme_dynamic
         ThemeMode.GLASS -> R.string.theme_glass
+        ThemeMode.CUSTOM -> R.string.theme_custom
         ThemeMode.DARK -> R.string.theme_dark
         ThemeMode.LIGHT -> R.string.theme_light
     }

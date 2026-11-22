@@ -1,10 +1,21 @@
-# The Ultimate Music Widget — v1.1
+# The Ultimate Music Widget — v1.2
 
 SEN0413 · Project 17 (App Widgets / Extensions)
 Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
+
+## What's new in 1.2
+
+| Area | Change |
+|---|---|
+| **Hand-offs** | Switching between Spotify, YouTube Music and local songs never brings another app to the screen: requests go through the app's session (by its own song id when known, then by search). A closed app is woken through its media browser service; only while you are inside our app may it open briefly. "Next" stops the old song at once; a playlist ends by itself when you start something else. |
+| **Playlists** | Rich cards with cover collages and colors, sorting (my order, name, recent, most played), drag to reorder playlists and songs, swipe to remove with undo, description, cover photo or emoji, color, pin, default shuffle/repeat, add to / mix with / copy to playlists, select several playlists and shuffle-play them without creating a new one. |
+| **Shuffle and repeat** | Shuffle, repeat all, repeat one on the player, the lock player, the playlist header and the 4×4 widget. Playlists start over at the end (repeat all by default). |
+| **Share codes** | "Share code" creates an encrypted `UMW1-…` code (optional PIN) with a QR code; "Enter code" imports it. Local songs travel as names only; the ones not found get Spotify / YouTube Music search buttons. |
+| **Widget** | Six sizes: 1×1, 2×1, 2×2, 4×1, 4×2, 4×4. A "My colors" theme with your own background color, transparency and bar color. |
+| **App colors** | Setup › Appearance: pick your own background color instead of the album colors. |
 
 ## What's new in 1.1
 

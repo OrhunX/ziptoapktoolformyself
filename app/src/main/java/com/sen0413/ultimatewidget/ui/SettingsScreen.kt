@@ -25,6 +25,7 @@ import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.chip
 import com.sen0413.ultimatewidget.ui.kit.setChipSelected
+import com.sen0413.ultimatewidget.ui.views.ColorPicker
 import com.sen0413.ultimatewidget.ui.kit.TextRole
 import com.sen0413.ultimatewidget.ui.kit.add
 import com.sen0413.ultimatewidget.ui.kit.card
@@ -130,6 +131,34 @@ class SettingsScreen(host: Host) : Screen(host) {
         add(context.row {
             add(night, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
             add(glass, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
+        }, top = dp(12))
+
+        add(context.label(context.getString(R.string.backdrop_title), TextRole.HEADING), top = dp(20))
+        add(context.label(context.getString(R.string.backdrop_body), TextRole.CAPTION, Ink.MIST), top = dp(4))
+        val fromCover = context.chip(context.getString(R.string.backdrop_cover)) {}
+        val customColor = context.chip(context.getString(R.string.backdrop_custom)) {}
+        fun syncBackdrop() {
+            val color = Appearance.backdrop
+            fromCover.setChipSelected(color == 0)
+            customColor.setChipSelected(color != 0)
+            customColor.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                if (color != 0) ColorPicker.swatch(context, color).apply { setSize(dp(16), dp(16)) } else null, null, null, null,
+            )
+            customColor.compoundDrawablePadding = dp(8)
+            host.ambient.refreshColors()
+        }
+        fromCover.setOnClickListener { Appearance.setBackdrop(context, 0); syncBackdrop() }
+        customColor.setOnClickListener {
+            val start = if (Appearance.backdrop != 0) Appearance.backdrop else Ink.VIOLET
+            ColorPicker.show(context, context.getString(R.string.backdrop_custom), start, false) {
+                Appearance.setBackdrop(context, it or 0xFF000000.toInt())
+                syncBackdrop()
+            }
+        }
+        syncBackdrop()
+        add(context.row {
+            add(fromCover, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+            add(customColor, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
         }, top = dp(12))
 
         add(context.label(context.getString(R.string.lock_player_title), TextRole.HEADING), top = dp(20))

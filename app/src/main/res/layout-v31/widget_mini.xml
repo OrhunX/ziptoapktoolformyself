@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_bg" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="6dp">
+
+        <ImageView
+            android:id="@+id/cover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/cover_shape"
+            android:clipToOutline="true"
+            android:contentDescription="@string/cd_cover"
+            android:scaleType="centerCrop"
+            android:src="@drawable/cover_night_train" />
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="4dp">
+
+            <FrameLayout
+                android:id="@+id/play_box"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="@string/cd_play">
+
+                <ImageView
+                    android:id="@+id/play_circle"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/play_circle" />
+
+                <ImageView
+                    android:id="@+id/btn_play"
+                    android:layout_width="17dp"
+                    android:layout_height="17dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_play" />
+            </FrameLayout>
+        </FrameLayout>
+    </FrameLayout>
+</FrameLayout>

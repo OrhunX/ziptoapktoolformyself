@@ -63,13 +63,25 @@ object Ink {
 object Appearance {
     private const val PREFS = "appearance"
     private const val KEY_GLASS = "glass"
+    private const val KEY_BACKDROP = "backdrop"
 
     var glass: Boolean = false
         private set
 
+    /** 0 = colors from the album cover; otherwise the user's own backdrop color. */
+    var backdrop: Int = 0
+        private set
+
     fun load(context: Context) {
-        glass = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_GLASS, false)
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        glass = p.getBoolean(KEY_GLASS, false)
+        backdrop = p.getInt(KEY_BACKDROP, 0)
         Ink.useGlass(glass)
+    }
+
+    fun setBackdrop(context: Context, color: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY_BACKDROP, color).apply()
+        backdrop = color
     }
 
     fun setGlass(context: Context, value: Boolean) {

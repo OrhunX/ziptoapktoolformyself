@@ -13,8 +13,8 @@ android {
         applicationId = "com.sen0413.ultimatewidget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "1.2"
     }
 
     // One fixed debug key (Android's standard debug credentials) so every CI build installs as an

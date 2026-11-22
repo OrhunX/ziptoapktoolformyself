@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- updatePeriodMillis = 0: no periodic wake-ups. The widget is updated only by events
+<!-- Resizes from 1×1 up to 4×4 (six layouts: 1×1, 2×1, 2×2, 4×1, 4×2, 4×4).
+     updatePeriodMillis = 0: no periodic wake-ups. The widget is updated only by events
      (track change, play/pause, source switch) and by visualizer frames while music plays. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="com.sen0413.ultimatewidget.ui.WidgetConfigActivity"
@@ -9,7 +10,7 @@
     android:maxResizeWidth="560dp"
     android:minHeight="110dp"
     android:minResizeHeight="40dp"
-    android:minResizeWidth="110dp"
+    android:minResizeWidth="40dp"
     android:minWidth="250dp"
     android:previewImage="@drawable/widget_preview"
     android:previewLayout="@layout/widget_medium"

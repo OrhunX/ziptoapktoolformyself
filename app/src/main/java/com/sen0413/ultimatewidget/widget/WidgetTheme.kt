@@ -33,12 +33,18 @@ object WidgetTheme {
 
     private val cache = LruCache<String, WidgetColors>(24)
 
-    fun colors(context: Context, mode: ThemeMode, source: SourceSnapshot): WidgetColors = when (mode) {
+    fun colors(
+        context: Context,
+        mode: ThemeMode,
+        source: SourceSnapshot,
+        config: WidgetConfig? = null,
+    ): WidgetColors = when (mode) {
         ThemeMode.DARK -> DARK
         ThemeMode.LIGHT -> LIGHT
         ThemeMode.DYNAMIC -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamic(context) else DARK
         ThemeMode.COVER -> fromCover(context, source)
         ThemeMode.GLASS -> glass(context, source)
+        ThemeMode.CUSTOM -> config?.let { readable(it.customBackground, it.customAccent, keepAccent = true) } ?: DARK
     }
 
     /** Glass: light text on a translucent pane; the accent still comes from the cover. */
@@ -73,14 +79,14 @@ object WidgetTheme {
     }
 
     /** Picks light or dark text, whichever contrasts more with the background (target 4.5:1). */
-    private fun readable(@ColorInt background: Int, @ColorInt accent: Int): WidgetColors {
+    private fun readable(@ColorInt background: Int, @ColorInt accent: Int, keepAccent: Boolean = false): WidgetColors {
         val bg = ColorUtils.setAlphaComponent(background, 255)
         val lightContrast = ColorUtils.calculateContrast(PAPER, bg)
         val darkContrast = ColorUtils.calculateContrast(NIGHT, bg)
         val on = if (lightContrast >= darkContrast) PAPER else NIGHT
         val muted = ColorUtils.blendARGB(on, bg, 0.25f)
         val opaqueAccent = ColorUtils.setAlphaComponent(accent, 255)
-        val safeAccent = if (ColorUtils.calculateContrast(opaqueAccent, bg) >= 3.0) opaqueAccent else on
+        val safeAccent = if (keepAccent || ColorUtils.calculateContrast(opaqueAccent, bg) >= 3.0) opaqueAccent else on
         return WidgetColors(bg, on, muted, safeAccent)
     }
 

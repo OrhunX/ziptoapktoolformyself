@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import com.sen0413.ultimatewidget.R
+import com.sen0413.ultimatewidget.data.RepeatMode
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.SourceSnapshot
@@ -89,6 +90,12 @@ class PlayerScreen(host: Host) : Screen(host) {
     private val duration = context.label("0:00", TextRole.CAPTION, Ink.MIST)
 
     private val playPause = PlayPauseView(context)
+    private val shuffleButton = context.iconButton(R.drawable.ic_shuffle, context.getString(R.string.cd_shuffle_off), Ink.FAINT) {
+        HubController.scope.launch { HubController.toggleShuffle() }
+    }
+    private val repeatButton = context.iconButton(R.drawable.ic_repeat, context.getString(R.string.cd_repeat_all)) {
+        HubController.scope.launch { HubController.cycleRepeat() }
+    }
     private val styleChips = LinkedHashMap<VisualizerView.Style, TextView>()
     private val videoButton = context.pill(context.getString(R.string.watch_video), filled = false) { openVideo() }
 
@@ -128,13 +135,16 @@ class PlayerScreen(host: Host) : Screen(host) {
 
         add(context.row {
             gravity = Gravity.CENTER
-            add(context.iconButton(R.drawable.ic_prev, context.getString(R.string.cd_previous), sizeDp = 56) {
+            // Fits a 360 dp phone: 44 + 52 + 72 + 52 + 44 dp plus gaps.
+            add(shuffleButton, dp(44), dp(44))
+            add(context.iconButton(R.drawable.ic_prev, context.getString(R.string.cd_previous), sizeDp = 52) {
                 HubController.scope.launch { HubController.previous() }
-            }, dp(56), dp(56))
-            add(playPause, dp(76), dp(76), start = dp(28))
-            add(context.iconButton(R.drawable.ic_next, context.getString(R.string.cd_next), sizeDp = 56) {
+            }, dp(52), dp(52), start = dp(6))
+            add(playPause, dp(72), dp(72), start = dp(12))
+            add(context.iconButton(R.drawable.ic_next, context.getString(R.string.cd_next), sizeDp = 52) {
                 HubController.scope.launch { HubController.next() }
-            }, dp(56), dp(56), start = dp(28))
+            }, dp(52), dp(52), start = dp(12))
+            add(repeatButton, dp(44), dp(44), start = dp(6))
         }, top = dp(2))
 
         val options = context.row {
@@ -213,6 +223,16 @@ class PlayerScreen(host: Host) : Screen(host) {
         playPause.playing = source.isPlaying
         playPause.contentDescription =
             context.getString(if (source.isPlaying) R.string.cd_pause else R.string.cd_play, titleText)
+
+        shuffleButton.imageTintList = android.content.res.ColorStateList.valueOf(if (state.shuffle) Ink.LAVENDER else Ink.FAINT)
+        shuffleButton.contentDescription = context.getString(if (state.shuffle) R.string.cd_shuffle_on else R.string.cd_shuffle_off)
+        repeatButton.setImageResource(if (state.repeat == RepeatMode.ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat)
+        repeatButton.imageTintList = android.content.res.ColorStateList.valueOf(if (state.repeat == RepeatMode.OFF) Ink.FAINT else Ink.LAVENDER)
+        repeatButton.contentDescription = context.getString(when (state.repeat) {
+            RepeatMode.ALL -> R.string.cd_repeat_all
+            RepeatMode.ONE -> R.string.cd_repeat_one
+            RepeatMode.OFF -> R.string.cd_repeat_off
+        })
 
         heart.setImageResource(if (state.isFavorite) R.drawable.ic_heart else R.drawable.ic_heart_outline)
         heart.imageTintList = android.content.res.ColorStateList.valueOf(if (state.isFavorite) Ink.EMBER else Ink.PAPER)

@@ -56,6 +56,8 @@ class HubWidgetProvider : AppWidgetProvider() {
                     ACTION_PREVIOUS -> HubController.previous()
                     ACTION_SWITCH_SOURCE -> HubController.switchSource()
                     ACTION_FAVORITE -> HubController.toggleFavorite()
+                    ACTION_SHUFFLE -> HubController.toggleShuffle()
+                    ACTION_REPEAT -> HubController.cycleRepeat()
                     ACTION_QUEUE_ITEM -> HubController.skipTo(intent.getIntExtra(EXTRA_QUEUE_INDEX, -1))
                 }
             } catch (t: Throwable) {
@@ -74,10 +76,13 @@ class HubWidgetProvider : AppWidgetProvider() {
         const val ACTION_SWITCH_SOURCE = "com.sen0413.ultimatewidget.action.SWITCH_SOURCE"
         const val ACTION_QUEUE_ITEM = "com.sen0413.ultimatewidget.action.QUEUE_ITEM"
         const val ACTION_FAVORITE = "com.sen0413.ultimatewidget.action.FAVORITE"
+        const val ACTION_SHUFFLE = "com.sen0413.ultimatewidget.action.SHUFFLE"
+        const val ACTION_REPEAT = "com.sen0413.ultimatewidget.action.REPEAT"
         const val EXTRA_QUEUE_INDEX = "com.sen0413.ultimatewidget.extra.QUEUE_INDEX"
 
         private val HUB_ACTIONS = setOf(
             ACTION_PLAY_PAUSE, ACTION_NEXT, ACTION_PREVIOUS, ACTION_SWITCH_SOURCE, ACTION_QUEUE_ITEM, ACTION_FAVORITE,
+            ACTION_SHUFFLE, ACTION_REPEAT,
         )
     }
 }

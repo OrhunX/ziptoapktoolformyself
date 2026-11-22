@@ -69,12 +69,26 @@ class AmbientBackgroundView(context: Context) : View(context) {
         }
     }
 
+    private var lastCover = Triple(Ink.VIOLET, Ink.EMBER, 0xFF2E2450.toInt())
+
+    /** Colors from the album cover; replaced by the user's own color when one is chosen in Setup. */
     fun setColors(@ColorInt primary: Int, @ColorInt secondary: Int, @ColorInt deep: Int) {
-        blobs[0].target = primary
-        blobs[1].target = secondary
-        blobs[2].target = deep
+        lastCover = Triple(primary, secondary, deep)
+        val custom = Appearance.backdrop
+        if (custom != 0) {
+            blobs[0].target = custom
+            blobs[1].target = ColorUtils.blendARGB(custom, 0xFFFFFFFF.toInt(), 0.35f)
+            blobs[2].target = ColorUtils.blendARGB(custom, 0xFF000000.toInt(), 0.55f)
+        } else {
+            blobs[0].target = primary
+            blobs[1].target = secondary
+            blobs[2].target = deep
+        }
         invalidate()
     }
+
+    /** Re-applies after the backdrop setting changed. */
+    fun refreshColors() = setColors(lastCover.first, lastCover.second, lastCover.third)
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(Ink.NIGHT)

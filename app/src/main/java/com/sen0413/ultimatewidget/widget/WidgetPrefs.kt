@@ -6,8 +6,9 @@ import android.os.Bundle
 import androidx.core.content.edit
 import java.util.concurrent.ConcurrentHashMap
 
+/** 1×1 MINI, 2×1 SMALL, 2×2 SQUARE, 4×1 SLIM, 4×2 MEDIUM, 4×4 LARGE. */
 enum class SizeClass {
-    SMALL, MEDIUM, LARGE;
+    MINI, SMALL, SQUARE, SLIM, MEDIUM, LARGE;
 
     companion object {
         /** Picks a layout from the size the launcher reports (dp). Works on every API level. */
@@ -16,16 +17,21 @@ enum class SizeClass {
             val height = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
             if (width == 0 || height == 0) return MEDIUM
             return when {
-                width >= 200 && height >= 200 -> LARGE
-                width >= 200 && height >= 90 -> MEDIUM
-                else -> SMALL
+                width < 100 && height < 110 -> MINI
+                height < 90 -> if (width >= 230) SLIM else SMALL
+                width < 200 -> SQUARE
+                height >= 200 -> LARGE
+                else -> MEDIUM
             }
         }
     }
 }
 
-/** GLASS: a translucent pane with a light edge; the wallpaper shows through. */
-enum class ThemeMode { COVER, DYNAMIC, GLASS, DARK, LIGHT }
+/**
+ * GLASS: a translucent pane with a light edge; the wallpaper shows through.
+ * CUSTOM: the user's own background color (with transparency) and bar color.
+ */
+enum class ThemeMode { COVER, DYNAMIC, GLASS, CUSTOM, DARK, LIGHT }
 
 /**
  * DOTS, LED and RAINBOW need API 31 (per-view sizes and tints in RemoteViews); older
@@ -39,6 +45,9 @@ data class WidgetConfig(
     val showVideo: Boolean = true,
     val showSource: Boolean = true,
     val showFavorite: Boolean = true,
+    /** ARGB; the alpha is the widget's transparency. Used by [ThemeMode.CUSTOM]. */
+    val customBackground: Int = 0xE63A2E5C.toInt(),
+    val customAccent: Int = 0xFFFF9F6E.toInt(),
 )
 
 /**
@@ -70,6 +79,8 @@ object WidgetPrefs {
             showVideo = p.getBoolean("video_$id", true),
             showSource = p.getBoolean("source_$id", true),
             showFavorite = p.getBoolean("fav_$id", true),
+            customBackground = p.getInt("cbg_$id", 0xE63A2E5C.toInt()),
+            customAccent = p.getInt("cacc_$id", 0xFFFF9F6E.toInt()),
         )
     }
 
@@ -81,6 +92,8 @@ object WidgetPrefs {
             putBoolean("video_$id", config.showVideo)
             putBoolean("source_$id", config.showSource)
             putBoolean("fav_$id", config.showFavorite)
+            putInt("cbg_$id", config.customBackground)
+            putInt("cacc_$id", config.customAccent)
         }
     }
 
@@ -88,7 +101,7 @@ object WidgetPrefs {
         sizeCache.remove(id)
         configCache.remove(id)
         prefs(context).edit {
-            listOf("size_", "theme_", "style_", "video_", "source_", "fav_").forEach { remove(it + id) }
+            listOf("size_", "theme_", "style_", "video_", "source_", "fav_", "cbg_", "cacc_").forEach { remove(it + id) }
         }
     }
 

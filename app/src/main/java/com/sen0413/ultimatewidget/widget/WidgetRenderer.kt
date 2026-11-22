@@ -14,6 +14,7 @@ import android.view.View
 import android.widget.RemoteViews
 import androidx.annotation.LayoutRes
 import com.sen0413.ultimatewidget.R
+import com.sen0413.ultimatewidget.data.RepeatMode
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
 import com.sen0413.ultimatewidget.hub.SourceSnapshot
@@ -85,6 +86,7 @@ object WidgetRenderer {
             val style = WidgetPrefs.config(context, id).style
             if (style == VisualizerStyle.OFF) continue
             val size = WidgetPrefs.size(context, id)
+            if (barCount(size) == 0) continue
             val views = RemoteViews(context.packageName, layoutFor(size))
             applyBarHeights(views, size, style, bars)
             manager.partiallyUpdateAppWidget(id, views)
@@ -110,7 +112,7 @@ object WidgetRenderer {
     ): RemoteViews {
         val source = state.current
         val track = source.track
-        val colors = WidgetTheme.colors(context, config.theme, source)
+        val colors = WidgetTheme.colors(context, config.theme, source, config)
         if (!preview) colorsById[appWidgetId] = colors
 
         val views = RemoteViews(context.packageName, layoutFor(size))
@@ -118,9 +120,13 @@ object WidgetRenderer {
             // White tint keeps the pane's own alpha: a translucent fill with a brighter edge.
             views.setImageViewResource(R.id.bg, R.drawable.widget_bg_glass)
             views.setInt(R.id.bg, "setColorFilter", android.graphics.Color.WHITE)
+            views.setInt(R.id.bg, "setImageAlpha", 255)
         } else {
             views.setImageViewResource(R.id.bg, R.drawable.widget_bg)
             views.setInt(R.id.bg, "setColorFilter", colors.background)
+            // Custom colors carry their own transparency; every other theme is opaque.
+            val alpha = if (config.theme == ThemeMode.CUSTOM) android.graphics.Color.alpha(config.customBackground) else 255
+            views.setInt(R.id.bg, "setImageAlpha", alpha)
         }
 
         val title = track?.title ?: context.getString(R.string.nothing_playing)
@@ -137,25 +143,33 @@ object WidgetRenderer {
         )
         views.setOnClickPendingIntent(R.id.play_box, actionIntent(context, HubWidgetProvider.ACTION_PLAY_PAUSE, appWidgetId))
 
-        applyVisualizer(context, views, size, config, bars, colors, state.visualizer)
+        if (barCount(size) > 0) applyVisualizer(context, views, size, config, bars, colors, state.visualizer)
 
-        if (size != SizeClass.SMALL) {
-            views.setTextViewText(R.id.artist, track?.artist.orEmpty())
-            views.setTextColor(R.id.artist, colors.onBackgroundMuted)
+        val withCover = size != SizeClass.SMALL
+        if (withCover) {
             applyCover(views, source)
             views.setOnClickPendingIntent(R.id.cover, openAppIntent(context))
-            applySourceChip(context, views, source, config, appWidgetId)
-            applyVideoChip(context, views, source, config, appWidgetId)
-            applyFavorite(context, views, state.isFavorite, config, colors, appWidgetId)
-            applyNavigation(context, views, size, colors, appWidgetId)
-
+        }
+        if (size == SizeClass.SQUARE || size == SizeClass.MEDIUM || size == SizeClass.LARGE) {
+            views.setTextViewText(R.id.artist, track?.artist.orEmpty())
+            views.setTextColor(R.id.artist, colors.onBackgroundMuted)
             val now = SystemClock.elapsedRealtime()
             val measuredAt = if (source.positionAtElapsedMs > 0) source.positionAtElapsedMs else now
             views.setChronometer(R.id.elapsed, measuredAt - source.positionMs, null, source.isPlaying)
             views.setTextColor(R.id.elapsed, colors.onBackgroundMuted)
         }
-
-        if (size == SizeClass.LARGE) applyQueue(context, views, appWidgetId, colors)
+        if (size == SizeClass.MEDIUM || size == SizeClass.LARGE) {
+            applySourceChip(context, views, source, config, appWidgetId)
+            applyVideoChip(context, views, source, config, appWidgetId)
+        }
+        if (size != SizeClass.MINI && size != SizeClass.SMALL) {
+            applyFavorite(context, views, state.isFavorite, config, colors, appWidgetId)
+            applyNavigation(context, views, size, colors, appWidgetId)
+        }
+        if (size == SizeClass.LARGE) {
+            applyModes(context, views, state, colors, appWidgetId)
+            applyQueue(context, views, appWidgetId, colors)
+        }
         return views
     }
 
@@ -306,13 +320,29 @@ object WidgetRenderer {
     ) {
         val next = Triple(R.id.btn_next, HubWidgetProvider.ACTION_NEXT, R.string.cd_next)
         val previous = Triple(R.id.btn_prev, HubWidgetProvider.ACTION_PREVIOUS, R.string.cd_previous)
-        // 4×2 has room for play + next only; 4×4 shows all three.
-        val buttons = if (size == SizeClass.LARGE) listOf(previous, next) else listOf(next)
+        // 4×4 and the 4×1 strip show previous too; the others have room for next only.
+        val buttons = if (size == SizeClass.LARGE || size == SizeClass.SLIM) listOf(previous, next) else listOf(next)
         for ((viewId, action, description) in buttons) {
             views.setInt(viewId, "setColorFilter", colors.onBackground)
             views.setContentDescription(viewId, context.getString(description))
             views.setOnClickPendingIntent(viewId, actionIntent(context, action, appWidgetId))
         }
+    }
+
+    /** Shuffle and repeat on the 4×4 widget; lit in the accent color when on. */
+    private fun applyModes(context: Context, views: RemoteViews, state: HubState, colors: WidgetColors, appWidgetId: Int) {
+        views.setInt(R.id.btn_shuffle, "setColorFilter", if (state.shuffle) colors.accent else colors.onBackgroundMuted)
+        views.setContentDescription(R.id.btn_shuffle, context.getString(if (state.shuffle) R.string.cd_shuffle_on else R.string.cd_shuffle_off))
+        views.setOnClickPendingIntent(R.id.btn_shuffle, actionIntent(context, HubWidgetProvider.ACTION_SHUFFLE, appWidgetId))
+        val (icon, description) = when (state.repeat) {
+            RepeatMode.ONE -> R.drawable.ic_repeat_one to R.string.cd_repeat_one
+            RepeatMode.ALL -> R.drawable.ic_repeat to R.string.cd_repeat_all
+            RepeatMode.OFF -> R.drawable.ic_repeat to R.string.cd_repeat_off
+        }
+        views.setImageViewResource(R.id.btn_repeat, icon)
+        views.setInt(R.id.btn_repeat, "setColorFilter", if (state.repeat == RepeatMode.OFF) colors.onBackgroundMuted else colors.accent)
+        views.setContentDescription(R.id.btn_repeat, context.getString(description))
+        views.setOnClickPendingIntent(R.id.btn_repeat, actionIntent(context, HubWidgetProvider.ACTION_REPEAT, appWidgetId))
     }
 
     @Suppress("DEPRECATION") // setRemoteAdapter(Intent) keeps the RemoteViewsService the assignment asks for
@@ -370,15 +400,25 @@ object WidgetRenderer {
 
     @LayoutRes
     private fun layoutFor(size: SizeClass): Int = when (size) {
+        SizeClass.MINI -> R.layout.widget_mini
         SizeClass.SMALL -> R.layout.widget_small
+        SizeClass.SQUARE -> R.layout.widget_square
+        SizeClass.SLIM -> R.layout.widget_slim
         SizeClass.MEDIUM -> R.layout.widget_medium
         SizeClass.LARGE -> R.layout.widget_large
     }
 
-    private fun barCount(size: SizeClass): Int = if (size == SizeClass.SMALL) 10 else 16
+    private fun barCount(size: SizeClass): Int = when (size) {
+        SizeClass.MINI -> 0
+        SizeClass.SMALL, SizeClass.SQUARE -> 10
+        else -> 16
+    }
 
     private fun maxBarDp(size: SizeClass): Float = when (size) {
+        SizeClass.MINI -> 0f
         SizeClass.SMALL -> 18f
+        SizeClass.SQUARE -> 26f
+        SizeClass.SLIM -> 14f
         SizeClass.MEDIUM -> 24f
         SizeClass.LARGE -> 48f
     }
