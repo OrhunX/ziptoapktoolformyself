@@ -2,6 +2,7 @@ package com.sen0413.ultimatewidget.hub
 
 import android.graphics.Bitmap
 import androidx.annotation.DrawableRes
+import com.sen0413.ultimatewidget.data.RepeatMode
 
 /** Where the music currently comes from. */
 enum class SourceKind { LOCAL, EXTERNAL }
@@ -73,6 +74,8 @@ data class HubState(
     val notificationAccess: Boolean,
     val session: PlaylistSession? = null,
     val isFavorite: Boolean = false,
+    val shuffle: Boolean = false,
+    val repeat: RepeatMode = RepeatMode.ALL,
 ) {
     val current: SourceSnapshot
         get() = if (active == SourceKind.EXTERNAL && external != null) external else local

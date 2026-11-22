@@ -28,6 +28,8 @@ import com.sen0413.ultimatewidget.data.MusicLibrary
 import com.sen0413.ultimatewidget.data.Playlist
 import com.sen0413.ultimatewidget.data.PlaylistEntry
 import com.sen0413.ultimatewidget.data.PlaylistStore
+import com.sen0413.ultimatewidget.data.RepeatMode
+import com.sen0413.ultimatewidget.data.TrackMatcher
 import com.sen0413.ultimatewidget.playback.DemoLibrary
 import com.sen0413.ultimatewidget.playback.MediaItems
 import com.sen0413.ultimatewidget.ui.LockPlayerActivity
@@ -62,6 +64,7 @@ object HubController {
     private const val FIRST_CHECK_MS = 2_500L
     private const val RECHECK_MS = 2_500L
     private const val MAX_NUDGES = 3
+    private const val TAKEOVER_GRACE_MS = 4_000L
 
     val scope: CoroutineScope = MainScope()
 
@@ -84,6 +87,9 @@ object HubController {
     private var screenOn = true
     private var visibleScreens = 0
     private var sessionGeneration = 0
+    private var shuffle = false
+    private var repeat = RepeatMode.ALL
+    private lateinit var browserBridge: BrowserBridge
 
     /** A hub playlist being played across apps, or null. */
     private var session: ActiveSession? = null
@@ -101,20 +107,43 @@ object HubController {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    private class ActiveSession(val playlist: Playlist, var index: Int) {
+    /**
+     * A hub playlist being played across apps: one playlist, or several mixed together.
+     * [order] holds indices into [entries] in play order (shuffled or not); [pos] points at
+     * the entry playing now. QueueEntry.index in the shown queue is a position in [order].
+     */
+    private class ActiveSession(
+        val name: String,
+        val playlistIds: List<Long>,
+        val entries: List<PlaylistEntry>,
+        var order: MutableList<Int>,
+        var pos: Int,
+    ) {
         var watch: ExternalTrackWatch? = null
         var localStarted = false
         /** Bumped for every entry, so checks scheduled for an earlier entry do nothing. */
         var generation = 0
+        var startedAt = 0L
         var query = ""
         var attempts = 0
         var nudges = 0
-        /** Android blocked opening the app; we posted "tap to continue" and wait for the tap. */
+        /** Songs in a row that could not be started; stops a playlist of only missing songs. */
+        var misses = 0
+        /** Android does not let us open the app now; we posted "tap to continue" and wait. */
         var waitingForTap = false
-        /** We opened the other app on top of ours; come back once its song is playing. */
+        /** We opened the other app on top of ours (only while the user was in our app); come back. */
         var returnToApp = false
-        val entry: PlaylistEntry get() = playlist.entries[index]
-        val queue: List<QueueEntry> = playlist.entries.mapIndexed { i, e ->
+        var queue: List<QueueEntry> = buildQueue()
+            private set
+
+        val entry: PlaylistEntry get() = entries[order[pos]]
+
+        fun rebuildQueue() {
+            queue = buildQueue()
+        }
+
+        private fun buildQueue() = order.mapIndexed { i, idx ->
+            val e = entries[idx]
             QueueEntry(e.title, e.artist, e.sourceLabel, index = i, queueId = e.id, sourcePackage = e.sourcePackage)
         }
     }
@@ -125,6 +154,8 @@ object HubController {
         playlists = PlaylistStore(app)
         localConnection = LocalPlayerConnection(app)
         sessions = ExternalSessionWatcher(app, ::onExternalControllerChanged)
+        browserBridge = BrowserBridge(app)
+        loadModes()
         local = initialLocalSnapshot()
         screenOn = app.getSystemService(PowerManager::class.java).isInteractive
 
@@ -155,7 +186,7 @@ object HubController {
     suspend fun playPause() {
         val s = session
         if (s != null && !s.entry.isLocal && external?.packageName != s.entry.sourcePackage) {
-            playEntry(s.index) // the app was not running yet: ask it again
+            playEntry(s.pos) // the app was not running yet: ask it again
             return
         }
         when (currentKind()) {
@@ -184,9 +215,8 @@ object HubController {
     }
 
     suspend fun next() {
-        val s = session
-        if (s != null) {
-            advance()
+        if (session != null) {
+            advance(auto = false)
             return
         }
         when (currentKind()) {
@@ -198,7 +228,7 @@ object HubController {
     suspend fun previous() {
         val s = session
         if (s != null) {
-            playEntry(if (s.index > 0) s.index - 1 else 0)
+            playEntry(if (s.pos > 0) s.pos - 1 else 0)
             return
         }
         when (currentKind()) {
@@ -228,6 +258,65 @@ object HubController {
         }
     }
 
+    // ---------------------------------------------------------------- shuffle and repeat
+
+    /** Shuffle on or off. In a hub playlist the current song keeps playing; the rest is reordered. */
+    suspend fun toggleShuffle() {
+        shuffle = !shuffle
+        saveModes()
+        val s = session
+        if (s != null) {
+            val current = s.order[s.pos]
+            s.order = if (shuffle) {
+                (listOf(current) + s.entries.indices.filter { it != current }.shuffled()).toMutableList()
+            } else {
+                s.entries.indices.toMutableList()
+            }
+            s.pos = s.order.indexOf(current)
+            s.rebuildQueue()
+        } else if (currentKind() == SourceKind.LOCAL) {
+            localConnection.withController { it.shuffleModeEnabled = shuffle }
+        } else {
+            _messages.tryEmit(app.getString(R.string.toast_modes_hub_only))
+        }
+        publish()
+    }
+
+    /** Repeat: all → one song → off → all. */
+    suspend fun cycleRepeat() {
+        repeat = when (repeat) {
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+            RepeatMode.OFF -> RepeatMode.ALL
+        }
+        saveModes()
+        if (session == null) {
+            if (currentKind() == SourceKind.LOCAL) {
+                localConnection.withController { it.repeatMode = playerRepeatMode() }
+            } else {
+                _messages.tryEmit(app.getString(R.string.toast_modes_hub_only))
+            }
+        }
+        publish()
+    }
+
+    private fun playerRepeatMode(): Int = when (repeat) {
+        RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+        RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+        RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+    }
+
+    private fun loadModes() {
+        val p = app.getSharedPreferences("hub", Context.MODE_PRIVATE)
+        shuffle = p.getBoolean("shuffle", false)
+        repeat = runCatching { RepeatMode.valueOf(p.getString("repeat", null) ?: "ALL") }.getOrDefault(RepeatMode.ALL)
+    }
+
+    private fun saveModes() {
+        app.getSharedPreferences("hub", Context.MODE_PRIVATE).edit()
+            .putBoolean("shuffle", shuffle).putString("repeat", repeat.name).apply()
+    }
+
     suspend fun seekTo(positionMs: Long) {
         val target = positionMs.coerceAtLeast(0L)
         when (currentKind()) {
@@ -255,24 +344,46 @@ object HubController {
         publish()
         localConnection.withController { c ->
             c.setMediaItems(tracks.map(MediaItems::from), index.coerceIn(0, tracks.lastIndex), 0L)
-            c.repeatMode = Player.REPEAT_MODE_ALL
+            c.repeatMode = playerRepeatMode()
+            c.shuffleModeEnabled = shuffle
             c.prepare()
             c.play()
         }
     }
 
-    /** Plays a hub playlist: each entry is played by the app it belongs to. */
-    suspend fun playPlaylist(playlist: Playlist, index: Int) {
+    /**
+     * Plays a hub playlist: each entry is played by the app it belongs to. [index] is the song
+     * the user tapped (-1 = from the start); [forceShuffle] is the Shuffle button. The
+     * playlist's own defaults decide shuffle and repeat otherwise.
+     */
+    suspend fun playPlaylist(playlist: Playlist, index: Int = -1, forceShuffle: Boolean = false) {
         if (playlist.entries.isEmpty()) return
+        shuffle = forceShuffle || playlist.defaultShuffle
+        repeat = playlist.defaultRepeat
+        saveModes()
+        startSession(playlist.name, listOf(playlist.id), playlist.entries, index)
+    }
+
+    /** Several playlists shuffled together without creating a new playlist. */
+    suspend fun playMix(selected: List<Playlist>) {
+        val entries = selected.flatMap { it.entries }.distinctBy { TrackMatcher.key(it.title, it.artist) }
+        if (entries.isEmpty()) return
+        shuffle = true
+        saveModes()
+        startSession(app.getString(R.string.mix_name, selected.size), selected.map { it.id }, entries, -1)
+    }
+
+    private suspend fun startSession(name: String, ids: List<Long>, entries: List<PlaylistEntry>, index: Int) {
         endSession()
-        session = ActiveSession(playlist, index.coerceIn(0, playlist.entries.lastIndex))
-        // Apps that are closed can only be opened by us while we are visible, or with the
-        // "display over other apps" permission; say so once instead of stalling later.
-        val closed = playlist.entries.mapNotNull { it.sourcePackage }.distinct().filter { sessions.controllerFor(it) == null }
-        if (closed.isNotEmpty() && !Settings.canDrawOverlays(app)) {
-            _messages.tryEmit(app.getString(R.string.toast_allow_overlay_tip))
+        val start = if (index in entries.indices) index else if (shuffle) entries.indices.random() else 0
+        val order = if (shuffle) {
+            (listOf(start) + entries.indices.filter { it != start }.shuffled()).toMutableList()
+        } else {
+            entries.indices.toMutableList()
         }
-        playEntry(session!!.index)
+        session = ActiveSession(name, ids, entries, order, order.indexOf(start))
+        scope.launch { playlists.recordPlay(ids) }
+        playEntry(session!!.pos)
     }
 
     /** The song playing right now, described so it can be stored in a playlist. */
@@ -288,6 +399,8 @@ object HubController {
             artist = track.artist,
             mediaUri = if (isLocal) track.mediaUri else null,
             durationMs = track.durationMs,
+            // The app's own id ("spotify:track:..."), so the song can later be asked for exactly.
+            mediaId = if (isLocal) null else track.mediaId,
         )
     }
 
@@ -314,13 +427,14 @@ object HubController {
 
     private suspend fun playEntry(index: Int) {
         val s = session ?: return
-        if (index !in s.playlist.entries.indices) {
+        if (index !in s.order.indices) {
             endSession()
             publish()
             return
         }
-        s.index = index
+        s.pos = index
         s.generation = ++sessionGeneration
+        s.startedAt = SystemClock.elapsedRealtime()
         s.localStarted = false
         s.watch = null
         s.attempts = 0
@@ -333,7 +447,8 @@ object HubController {
         if (entry.isLocal) {
             val uri = entry.mediaUri
             if (uri == null) {
-                advance()
+                // A song from someone else's code that is not on this phone: skip it.
+                missed(s)
                 return
             }
             sessions.preferredPackage = null
@@ -344,14 +459,17 @@ object HubController {
                 ?: LocalTrack("hub:${entry.id}", entry.title, entry.artist, entry.durationMs, uri)
             localConnection.withController { c ->
                 c.repeatMode = Player.REPEAT_MODE_OFF
+                c.shuffleModeEnabled = false
                 c.setMediaItems(listOf(MediaItems.from(track)), 0, 0L)
                 c.prepare()
                 c.play()
             }
+            s.misses = 0
         } else {
-            val pkg = entry.sourcePackage ?: return advance()
-            // Stop everything else first: two apps playing at once is what made the hub lose track.
-            pauseOthers(keepPackage = pkg, keepLocal = false)
+            val pkg = entry.sourcePackage ?: return missed(s)
+            // Stop everything first, including the same app: the old song must not keep playing
+            // while the next one is requested (that is what made "next" look ignored).
+            pauseOthers(keepPackage = null, keepLocal = false)
             active = SourceKind.EXTERNAL
             sessions.preferredPackage = pkg
             s.watch = ExternalTrackWatch(entry.title, SystemClock.elapsedRealtime())
@@ -363,35 +481,42 @@ object HubController {
     }
 
     /**
-     * Asks the entry's app to play it. First through its live session (no app switch),
-     * then through the app's own "play from search" activity, which Spotify and YouTube Music
-     * handle more reliably. If Android does not let us open the app right now, a notification
-     * offers the user a one-tap continue.
+     * Asks the entry's app to play it, in the background:
+     *  1. through its live session: by the app's own id when we have it, else by search;
+     *  2. again by search;
+     * and when the app has no session at all: through its media browser service (no screen),
+     * or, only while the user is inside our app, by opening it briefly. Otherwise a
+     * "tap to continue" notification; nothing else is ever brought to the screen.
      */
     private fun requestExternal(s: ActiveSession) {
         val entry = s.entry
         val pkg = entry.sourcePackage ?: return
         s.attempts++
         val controller = sessions.controllerFor(pkg)
-        if (controller != null && s.attempts == 1) {
-            controller.transportControls.playFromSearch(s.query, searchExtras(entry))
+        if (controller != null) {
+            ask(controller, entry, s, preferId = s.attempts == 1)
             return
         }
-        if (canStartActivities()) {
-            val wasOnScreen = visibleScreens > 0
-            if (launchPlayFromSearch(pkg, entry, s.query)) {
-                s.returnToApp = wasOnScreen
-                return
+        val generation = s.generation
+        browserBridge.connect(pkg) { browserController ->
+            val current = session
+            if (current == null || current.generation != generation) return@connect
+            when {
+                browserController != null -> ask(browserController, entry, current, preferId = true)
+                visibleScreens > 0 && launchPlayFromSearch(pkg, entry, current.query) -> current.returnToApp = true
+                HubNotifications.showContinue(app, entry.sourceLabel, entry.title, playFromSearchIntent(pkg, entry, current.query)) ->
+                    current.waitingForTap = true
+                else -> _messages.tryEmit(app.getString(R.string.toast_app_not_running, entry.sourceLabel))
             }
         }
-        if (controller != null) {
-            controller.transportControls.playFromSearch(s.query, searchExtras(entry))
-            return
-        }
-        if (HubNotifications.showContinue(app, entry.sourceLabel, entry.title, playFromSearchIntent(pkg, entry, s.query))) {
-            s.waitingForTap = true
+    }
+
+    private fun ask(controller: PlatformController, entry: PlaylistEntry, s: ActiveSession, preferId: Boolean) {
+        val mediaId = entry.mediaId
+        if (preferId && mediaId != null) {
+            controller.transportControls.playFromMediaId(mediaId, searchExtras(entry))
         } else {
-            _messages.tryEmit(app.getString(R.string.toast_app_not_running, entry.sourceLabel))
+            controller.transportControls.playFromSearch(s.query, searchExtras(entry))
         }
     }
 
@@ -432,6 +557,7 @@ object HubController {
             return
         }
         if (controller != null && watch.matches(title)) {
+            // The requested song is loaded: only now is "play" safe (never on another song).
             if (!playing && s.nudges < MAX_NUDGES) {
                 s.nudges++
                 controller.transportControls.play()
@@ -444,25 +570,48 @@ object HubController {
             // Never play a different song in its place: say so and move on.
             _messages.tryEmit(app.getString(R.string.toast_song_not_found, s.entry.title, s.entry.sourceLabel))
             controller?.transportControls?.pause()
-            advance()
+            missed(s)
             return
         }
-        if (s.attempts < 2) {
-            requestExternal(s)
-        } else if (controller != null && !playing && s.nudges < MAX_NUDGES) {
-            s.nudges++
-            controller.transportControls.play()
-        }
+        // A wrong song may be playing (the app ignored the request): keep it quiet and ask again.
+        if (controller != null && playing) controller.transportControls.pause()
+        if (s.attempts < 3) requestExternal(s)
         scheduleCheck(generation, RECHECK_MS)
     }
 
-    private suspend fun advance() {
-        val s = session ?: return
-        if (s.index + 1 < s.playlist.entries.size) {
-            playEntry(s.index + 1)
-        } else {
+    /** Skips a song that could not be started; ends the playlist when nothing can be played. */
+    private suspend fun missed(s: ActiveSession) {
+        s.misses++
+        if (s.misses >= s.order.size) {
+            _messages.tryEmit(app.getString(R.string.toast_nothing_playable))
             endSession()
             publish()
+            return
+        }
+        advance(auto = false)
+    }
+
+    /**
+     * Moves on. [auto] is a song that ended by itself: with "repeat one" it plays again.
+     * At the end, "repeat all" (the default) starts over, reshuffled when shuffle is on.
+     */
+    private suspend fun advance(auto: Boolean) {
+        val s = session ?: return
+        if (auto) s.misses = 0
+        when {
+            auto && repeat == RepeatMode.ONE -> playEntry(s.pos)
+            s.pos + 1 < s.order.size -> playEntry(s.pos + 1)
+            repeat != RepeatMode.OFF -> {
+                if (shuffle) {
+                    s.order = s.entries.indices.shuffled().toMutableList()
+                    s.rebuildQueue()
+                }
+                playEntry(0)
+            }
+            else -> {
+                endSession()
+                publish()
+            }
         }
     }
 
@@ -472,6 +621,7 @@ object HubController {
         sessionGeneration++
         sessions.preferredPackage = null
         HubNotifications.cancelContinue(app)
+        browserBridge.disconnectAll()
     }
 
     private fun searchExtras(entry: PlaylistEntry) = Bundle().apply {
@@ -501,9 +651,6 @@ object HubController {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         runCatching { app.startActivity(intent) }
     }
-
-    /** Android lets us open another app only while we are on screen, or with the overlay permission. */
-    private fun canStartActivities(): Boolean = visibleScreens > 0 || Settings.canDrawOverlays(app)
 
     /** Called by our activities from onStart/onStop. */
     fun onScreenVisible(visible: Boolean) {
@@ -578,7 +725,7 @@ object HubController {
             if (player.isPlaying) s.localStarted = true
             if (s.localStarted && player.playbackState == Player.STATE_ENDED) {
                 s.localStarted = false
-                scope.launch { advance() }
+                scope.launch { advance(auto = true) }
             }
         }
 
@@ -688,12 +835,29 @@ object HubController {
             if (result == ExternalTrackWatch.Result.MOVED_ON) {
                 s.watch = null
                 externalController?.transportControls?.pause()
-                scope.launch { advance() }
+                scope.launch { advance(auto = true) }
             }
         }
+        if (s != null) endSessionIfUserTookOver(s)
 
         autoSelectSource()
         publish()
+    }
+
+    /**
+     * The user started something else (another app, or another song in Spotify outside the
+     * hub's request): the hub playlist is over, and "next" goes back to that app's own queue.
+     */
+    private fun endSessionIfUserTookOver(s: ActiveSession) {
+        if (SystemClock.elapsedRealtime() - s.startedAt < TAKEOVER_GRACE_MS || !notificationAccess) return
+        val entryPkg = s.entry.sourcePackage
+        val other = sessions.otherSessions().any {
+            it.packageName != entryPkg && it.playbackState?.state == PlaybackState.STATE_PLAYING
+        }
+        if (other) {
+            endSession()
+            autoSelectSource()
+        }
     }
 
     /** Follows whichever source is actually playing; a hub playlist decides for itself. */
@@ -718,7 +882,9 @@ object HubController {
             active = active,
             visualizer = visualizerStatus,
             notificationAccess = notificationAccess,
-            session = s?.let { PlaylistSession(it.playlist.id, it.playlist.name, it.index, it.queue) },
+            session = s?.let { PlaylistSession(it.playlistIds.firstOrNull() ?: -1L, it.name, it.pos, it.queue) },
+            shuffle = shuffle,
+            repeat = repeat,
         )
         val track = base.current.track
         val favorite = track != null && ::playlists.isInitialized && playlists.isFavorite(track.title, track.artist)
@@ -735,6 +901,7 @@ object HubController {
             s.active, cur.packageName, cur.track?.title, cur.track?.artist, cur.track?.mediaId,
             System.identityHashCode(cur.track?.art), cur.isPlaying,
             cur.positionAtElapsedMs - cur.positionMs, s.visualizer, s.external != null, s.isFavorite,
+            s.shuffle, s.repeat,
         )
         if (renderKey != lastRenderKey) {
             lastRenderKey = renderKey

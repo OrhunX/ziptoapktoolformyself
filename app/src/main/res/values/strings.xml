@@ -168,4 +168,8 @@
     <string name="style_particles">Particles</string>
     <string name="style_center">Center</string>
     <string name="style_rainbow">Rainbow</string>
+    <!-- v1.2: playlists -->
+    <string name="toast_modes_hub_only">Shuffle and repeat work for hub playlists and music on this phone; Spotify and YouTube Music keep their own</string>
+    <string name="toast_nothing_playable">None of these songs could be started, playlist stopped</string>
+    <string name="mix_name">Mix · %1$d playlists</string>
 </resources>
