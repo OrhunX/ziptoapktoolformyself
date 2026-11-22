@@ -37,7 +37,7 @@ final class MusicLibrary {
     private(set) var appleSongs: [AppleSong] = []
     private(set) var appleAccess: MPMediaLibraryAuthorizationStatus = MPMediaLibrary.authorizationStatus()
 
-    static let musicDir: URL = {
+    nonisolated static let musicDir: URL = {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Music")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
@@ -48,7 +48,7 @@ final class MusicLibrary {
         if appleAccess == .authorized { reloadApple() }
     }
 
-    static func url(forFile name: String) -> URL { musicDir.appendingPathComponent(name) }
+    nonisolated static func url(forFile name: String) -> URL { musicDir.appendingPathComponent(name) }
 
     // MARK: files
 
@@ -136,7 +136,7 @@ final class MusicLibrary {
         }
     }
 
-    static func mediaItem(persistentID: UInt64) -> MPMediaItem? {
+    nonisolated static func mediaItem(persistentID: UInt64) -> MPMediaItem? {
         let query = MPMediaQuery.songs()
         query.addFilterPredicate(MPMediaPropertyPredicate(value: NSNumber(value: persistentID), forProperty: MPMediaItemPropertyPersistentID))
         return query.items?.first

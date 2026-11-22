@@ -530,15 +530,21 @@ final class PlaybackHub {
             return
         }
         ambientPhase += 1.0 / 30.0
-        let beat = pow(max(0, sin(ambientPhase * .pi * 2 * 1.0)), 6)
+        let pulse: Double = max(0, sin(ambientPhase * Double.pi * 2))
+        let beat: Double = pow(pulse, 6)
         let gain = settings.sensitivity
-        bars = (0..<n).map { i in
-            let x = Double(i) / Double(n)
-            let wave = 0.5 + 0.5 * sin(ambientPhase * (1.3 + x * 2.1) + Double(i) * 0.7)
-            let shape = 1.0 - pow(x - 0.25, 2) * 1.2
-            let v = (0.18 + 0.42 * wave * shape + 0.3 * beat * (1 - x)) * gain
-            return Float(min(max(v, 0.04), 1))
+        var next = [Float](repeating: 0, count: n)
+        for i in 0..<n {
+            let x: Double = Double(i) / Double(n)
+            let speed: Double = 1.3 + x * 2.1
+            let angle: Double = ambientPhase * speed + Double(i) * 0.7
+            let wave: Double = 0.5 + 0.5 * sin(angle)
+            let shape: Double = 1.0 - (x - 0.25) * (x - 0.25) * 1.2
+            let kick: Double = 0.3 * beat * (1.0 - x)
+            let v: Double = (0.18 + 0.42 * wave * shape + kick) * gain
+            next[i] = Float(min(max(v, 0.04), 1.0))
         }
+        bars = next
     }
 
     private func setArtwork(_ image: UIImage?) {
