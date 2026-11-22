@@ -20,6 +20,7 @@ import com.sen0413.ultimatewidget.hub.VisualizerStatus
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.TextRole
 import com.sen0413.ultimatewidget.ui.kit.add
+import com.sen0413.ultimatewidget.ui.kit.card
 import com.sen0413.ultimatewidget.ui.kit.chip
 import com.sen0413.ultimatewidget.ui.kit.column
 import com.sen0413.ultimatewidget.ui.kit.dp
@@ -99,6 +100,23 @@ class PlayerScreen(host: Host) : Screen(host) {
     private val styleChips = LinkedHashMap<VisualizerView.Style, TextView>()
     private val videoButton = context.pill(context.getString(R.string.watch_video), filled = false) { openVideo() }
 
+    /** First run (nothing to play yet): where the music comes from. */
+    private val welcomeAllow = context.pill(context.getString(R.string.welcome_allow)) { host.requestMediaAccess() }
+    private val welcomeLibrary = context.pill(context.getString(R.string.welcome_library)) { host.open(Tab.LIBRARY) }
+    private val welcomeCard = context.card {
+        add(context.label(context.getString(R.string.welcome_title), TextRole.HEADING))
+        add(context.label(context.getString(R.string.welcome_body), TextRole.CAPTION, Ink.MIST), top = dp(6))
+        add(context.row {
+            add(welcomeAllow, ViewGroup.LayoutParams.WRAP_CONTENT)
+            add(welcomeLibrary, ViewGroup.LayoutParams.WRAP_CONTENT)
+            add(
+                context.pill(context.getString(R.string.welcome_setup), filled = false) { host.open(Tab.SETTINGS) },
+                ViewGroup.LayoutParams.WRAP_CONTENT, start = dp(8),
+            )
+        }, top = dp(12))
+        visibility = View.GONE
+    }
+
     private var state: HubState? = null
     private var shown = false
     private var artKey: Any? = null
@@ -113,6 +131,7 @@ class PlayerScreen(host: Host) : Screen(host) {
             add(sessionLabel, 0, weight = 1f, start = dp(12))
         })
 
+        add(welcomeCard, top = dp(10))
         add(stage, height = 0, weight = 1f, top = dp(8))
 
         add(context.row {
@@ -215,6 +234,14 @@ class PlayerScreen(host: Host) : Screen(host) {
             context.getString(R.string.playlist_position, session.name, session.index + 1, session.queue.size)
         } else {
             ""
+        }
+
+        val empty = track == null && session == null && state.external?.track == null
+        welcomeCard.visibility = if (empty) View.VISIBLE else View.GONE
+        if (empty) {
+            val granted = HubController.library.hasPermission()
+            welcomeAllow.visibility = if (granted) View.GONE else View.VISIBLE
+            welcomeLibrary.visibility = if (granted) View.VISIBLE else View.GONE
         }
 
         val titleText = track?.title?.takeIf { it.isNotBlank() } ?: context.getString(R.string.nothing_playing)

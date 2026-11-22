@@ -12,10 +12,10 @@ enum class SizeClass {
 
     companion object {
         /** Picks a layout from the size the launcher reports (dp). Works on every API level. */
-        fun fromOptions(options: Bundle?): SizeClass {
+        fun fromOptions(options: Bundle?, fallback: SizeClass = MEDIUM): SizeClass {
             val width = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
             val height = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
-            if (width == 0 || height == 0) return MEDIUM
+            if (width == 0 || height == 0) return fallback
             return when {
                 width < 100 && height < 110 -> MINI
                 height < 90 -> if (width >= 230) SLIM else SMALL
@@ -63,7 +63,20 @@ object WidgetPrefs {
 
     fun size(context: Context, id: Int): SizeClass = sizeCache.getOrPut(id) {
         prefs(context).getString("size_$id", null)?.let { enumOrNull<SizeClass>(it) }
-            ?: SizeClass.fromOptions(AppWidgetManager.getInstance(context).getAppWidgetOptions(id))
+            ?: SizeClass.fromOptions(AppWidgetManager.getInstance(context).getAppWidgetOptions(id), defaultSize(context, id))
+    }
+
+    /** The size the widget was picked at in the launcher's list (until the launcher reports it). */
+    fun defaultSize(context: Context, id: Int): SizeClass {
+        val provider = runCatching { AppWidgetManager.getInstance(context).getAppWidgetInfo(id)?.provider?.className }.getOrNull()
+        return when (provider) {
+            MiniWidgetProvider::class.java.name -> SizeClass.MINI
+            SmallWidgetProvider::class.java.name -> SizeClass.SMALL
+            SquareWidgetProvider::class.java.name -> SizeClass.SQUARE
+            SlimWidgetProvider::class.java.name -> SizeClass.SLIM
+            LargeWidgetProvider::class.java.name -> SizeClass.LARGE
+            else -> SizeClass.MEDIUM
+        }
     }
 
     fun setSize(context: Context, id: Int, size: SizeClass) {

@@ -13,11 +13,11 @@ import com.sen0413.ultimatewidget.hub.SourceSnapshot
  * MediaSession. Other songs open a YouTube search for the official video.
  *
  * The production design resolves the exact video with the YouTube Data API and caches it by
- * ISRC; this demo uses a search link so it runs without an API key.
+ * ISRC; a search link works without an API key.
  */
 object VideoLinks {
     fun intentFor(context: Context, source: SourceSnapshot): Intent? {
-        if (source.kind != SourceKind.EXTERNAL) return null // demo tracks have no video
+        if (source.kind != SourceKind.EXTERNAL) return null // local files have no video
         val track = source.track ?: return null
         val pkg = source.packageName ?: return null
 

@@ -23,7 +23,7 @@
             android:layout_height="match_parent"
             android:contentDescription="@string/cd_cover"
             android:scaleType="centerCrop"
-            android:src="@drawable/cover_night_train" />
+            android:src="@drawable/cover_placeholder" />
 
         <FrameLayout
             android:layout_width="wrap_content"

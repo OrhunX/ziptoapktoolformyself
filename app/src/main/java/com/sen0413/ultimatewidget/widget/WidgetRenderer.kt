@@ -51,9 +51,16 @@ object WidgetRenderer {
 
     fun colorsFor(appWidgetId: Int): WidgetColors = colorsById[appWidgetId] ?: WidgetTheme.DARK
 
-    fun widgetIds(context: Context): IntArray = cachedIds ?: AppWidgetManager.getInstance(context)
-        .getAppWidgetIds(ComponentName(context, HubWidgetProvider::class.java))
-        .also { cachedIds = it }
+    /** Every provider in the launcher's list (one per size) shares this renderer. */
+    private val PROVIDERS = listOf(
+        HubWidgetProvider::class.java, MiniWidgetProvider::class.java, SmallWidgetProvider::class.java,
+        SquareWidgetProvider::class.java, SlimWidgetProvider::class.java, LargeWidgetProvider::class.java,
+    )
+
+    fun widgetIds(context: Context): IntArray = cachedIds ?: run {
+        val manager = AppWidgetManager.getInstance(context)
+        PROVIDERS.flatMap { manager.getAppWidgetIds(ComponentName(context, it)).toList() }.toIntArray()
+    }.also { cachedIds = it }
 
     fun invalidateIds() {
         cachedIds = null

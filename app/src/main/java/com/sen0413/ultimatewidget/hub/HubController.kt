@@ -30,11 +30,11 @@ import com.sen0413.ultimatewidget.data.PlaylistEntry
 import com.sen0413.ultimatewidget.data.PlaylistStore
 import com.sen0413.ultimatewidget.data.RepeatMode
 import com.sen0413.ultimatewidget.data.TrackMatcher
-import com.sen0413.ultimatewidget.playback.DemoLibrary
 import com.sen0413.ultimatewidget.playback.MediaItems
 import com.sen0413.ultimatewidget.ui.LockPlayerActivity
 import com.sen0413.ultimatewidget.visualizer.VisualizerEngine
 import com.sen0413.ultimatewidget.visualizer.VisualizerService
+import com.sen0413.ultimatewidget.widget.RenderThread
 import com.sen0413.ultimatewidget.widget.WidgetRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
@@ -168,7 +168,12 @@ object HubController {
         registerSystemReceivers()
 
         VisualizerEngine.loadSettings(app)
-        VisualizerEngine.onFrame = { bars -> WidgetRenderer.pushBars(app, bars) }
+        VisualizerEngine.onFrame = { bars ->
+            // Coalesced: if the render thread is busy, only the newest frame is drawn.
+            if (pendingBars.getAndSet(bars) == null) {
+                RenderThread.post { pendingBars.getAndSet(null)?.let { WidgetRenderer.pushBars(app, it) } }
+            }
+        }
         VisualizerEngine.onStatus = { status ->
             visualizerStatus = status
             publish()
@@ -822,8 +827,8 @@ object HubController {
         val title = metadata?.title?.toString() ?: local.track?.title.orEmpty()
         val artist = metadata?.artist?.toString().orEmpty()
         val uri = (item?.requestMetadata?.mediaUri ?: item?.localConfiguration?.uri)?.toString()
-        val coverRes = DemoLibrary.coverFor(mediaId)
-        val art = if (item != null && coverRes == 0) localArt(uri, "$title|$artist") else null
+        val coverRes = 0
+        val art = if (item != null) localArt(uri, "$title|$artist") else null
 
         val count = player.mediaItemCount
         val index = player.currentMediaItemIndex
@@ -1029,6 +1034,9 @@ object HubController {
         return if (favorite) base.copy(isFavorite = true) else base
     }
 
+    private val pendingRender = java.util.concurrent.atomic.AtomicReference<HubState?>(null)
+    private val pendingBars = java.util.concurrent.atomic.AtomicReference<FloatArray?>(null)
+
     private fun publish() {
         val s = buildState()
         _state.value = s
@@ -1043,14 +1051,21 @@ object HubController {
         )
         if (renderKey != lastRenderKey) {
             lastRenderKey = renderKey
-            WidgetRenderer.renderAll(app, s)
-            LockScreenCard.update(app, s)
+            // Drawn off the main thread (covers, colors, RemoteViews), newest state only, so a
+            // tap on a song gets an instant response.
+            if (pendingRender.getAndSet(s) == null) {
+                RenderThread.post {
+                    val latest = pendingRender.getAndSet(null) ?: return@post
+                    WidgetRenderer.renderAll(app, latest)
+                    LockScreenCard.update(app, latest)
+                }
+            }
         }
 
         val queueKey = Triple(s.session?.playlistId, s.queue.map { it.queueId to it.title }, s.queueIndex)
         if (queueKey != lastQueueKey) {
             lastQueueKey = queueKey
-            WidgetRenderer.notifyQueueChanged(app)
+            RenderThread.post { WidgetRenderer.notifyQueueChanged(app) }
         }
 
         val visualizerKey = listOf(
@@ -1132,21 +1147,12 @@ object HubController {
     private fun isListenerEnabled(): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(app).contains(app.packageName)
 
-    private fun initialLocalSnapshot(): SourceSnapshot {
-        val demo = DemoLibrary.localTracks(app)
-        val first = demo.first()
-        val label = app.getString(R.string.source_local_file)
-        return SourceSnapshot(
-            kind = SourceKind.LOCAL,
-            appLabel = app.getString(R.string.source_local),
-            packageName = null,
-            track = TrackInfo(
-                title = first.title, artist = first.artist, mediaId = first.id,
-                coverRes = first.coverRes, durationMs = first.durationMs, mediaUri = first.uri,
-            ),
-            isPlaying = false,
-            queue = demo.mapIndexed { index, t -> QueueEntry(t.title, t.artist, label, index) },
-            currentQueueIndex = 0,
-        )
-    }
+    /** Nothing loaded yet: the screens show the welcome card until the user picks music. */
+    private fun initialLocalSnapshot(): SourceSnapshot = SourceSnapshot(
+        kind = SourceKind.LOCAL,
+        appLabel = app.getString(R.string.source_local),
+        packageName = null,
+        track = null,
+        isPlaying = false,
+    )
 }

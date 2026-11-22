@@ -167,7 +167,14 @@ object LockScreenCard {
     private var placeholder: Bitmap? = null
 
     private fun fallbackArt(context: Context): Bitmap? =
-        placeholder ?: BitmapFactory.decodeResource(context.resources, R.drawable.cover_night_train)
+        placeholder ?: context.getDrawable(R.drawable.cover_placeholder)
+            ?.let { d ->
+                Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888).also { b ->
+                    val canvas = android.graphics.Canvas(b)
+                    d.setBounds(0, 0, 256, 256)
+                    d.draw(canvas)
+                }
+            }
             ?.also { placeholder = it }
 
     /** The lock-screen controls of Android 13+ talk to the session directly. */

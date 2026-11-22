@@ -9,18 +9,17 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.sen0413.ultimatewidget.R
-import com.sen0413.ultimatewidget.playback.DemoLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
-/** Everything our own player can play: the bundled demo tracks plus the phone's audio files. */
+/** Everything our own player can play: the phone's audio files (MediaStore). */
 class MusicLibrary(context: Context) {
     private val app = context.applicationContext
 
-    private val _tracks = MutableStateFlow(DemoLibrary.localTracks(app))
+    private val _tracks = MutableStateFlow<List<LocalTrack>>(emptyList())
     val tracks: StateFlow<List<LocalTrack>> = _tracks.asStateFlow()
 
     val permission: String
@@ -35,13 +34,11 @@ class MusicLibrary(context: Context) {
 
     /** Re-reads MediaStore. Safe to call often; does nothing without the permission. */
     suspend fun refresh() {
-        val demo = DemoLibrary.localTracks(app)
         if (!hasPermission()) {
-            _tracks.value = demo
+            _tracks.value = emptyList()
             return
         }
-        val device = withContext(Dispatchers.IO) { queryDevice() }
-        _tracks.value = demo + device
+        _tracks.value = withContext(Dispatchers.IO) { queryDevice() }
     }
 
     private fun queryDevice(): List<LocalTrack> {

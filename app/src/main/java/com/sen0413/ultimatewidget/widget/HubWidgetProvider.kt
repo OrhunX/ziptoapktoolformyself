@@ -13,12 +13,13 @@ import kotlinx.coroutines.launch
  * Widget lifecycle and button handling. Buttons are broadcasts to this provider; the work is
  * delegated to the hub inside goAsync() so it never blocks the broadcast or the main thread.
  */
-class HubWidgetProvider : AppWidgetProvider() {
+open class HubWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         WidgetRenderer.invalidateIds()
         val state = HubController.state.value
-        appWidgetIds.forEach { WidgetRenderer.render(context, it, state, forceFull = true) }
+        val app = context.applicationContext
+        RenderThread.post { appWidgetIds.forEach { WidgetRenderer.render(app, it, state, forceFull = true) } }
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -27,9 +28,14 @@ class HubWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         newOptions: Bundle,
     ) {
-        WidgetPrefs.setSize(context, appWidgetId, SizeClass.fromOptions(newOptions))
-        WidgetRenderer.render(context, appWidgetId, HubController.state.value, forceFull = true)
-        WidgetRenderer.notifyQueueChanged(context)
+        val size = SizeClass.fromOptions(newOptions, fallback = WidgetPrefs.defaultSize(context, appWidgetId))
+        WidgetPrefs.setSize(context, appWidgetId, size)
+        val app = context.applicationContext
+        val state = HubController.state.value
+        RenderThread.post {
+            WidgetRenderer.render(app, appWidgetId, state, forceFull = true)
+            WidgetRenderer.notifyQueueChanged(app)
+        }
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
@@ -86,3 +92,13 @@ class HubWidgetProvider : AppWidgetProvider() {
         )
     }
 }
+
+/*
+ * One entry per size in the launcher's widget list, each placed at its own size. They all share
+ * the hub's rendering and buttons; resizing any of them later still switches layouts.
+ */
+class MiniWidgetProvider : HubWidgetProvider()
+class SmallWidgetProvider : HubWidgetProvider()
+class SquareWidgetProvider : HubWidgetProvider()
+class SlimWidgetProvider : HubWidgetProvider()
+class LargeWidgetProvider : HubWidgetProvider()

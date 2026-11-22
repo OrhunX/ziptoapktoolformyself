@@ -2,7 +2,7 @@ package com.sen0413.ultimatewidget.data
 
 import androidx.annotation.DrawableRes
 
-/** A song our own player can play: a bundled demo track or an audio file on the phone. */
+/** A song our own player can play: an audio file on the phone. */
 data class LocalTrack(
     val id: String,
     val title: String,

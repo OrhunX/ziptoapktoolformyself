@@ -6,7 +6,9 @@ import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
 import android.os.SystemClock
 import android.util.Log
-import androidx.annotation.MainThread
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.sen0413.ultimatewidget.hub.VisualizerStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +17,10 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Reads the real audio spectrum with android.media.audiofx.Visualizer and publishes bar
- * heights. Created on the main thread, so capture callbacks arrive on the main thread too.
+ * heights. Runs on its own thread: creating an android.media.audiofx.Visualizer is a slow
+ * call into the audio system, and doing it on the main thread froze the app for a moment
+ * whenever a song started. Capture callbacks arrive on that thread; status changes are
+ * handed to the main thread.
  *
  * Sources, in order of preference (chosen by HubController):
  *  1. our own player's audio session (exact),
@@ -23,7 +28,6 @@ import kotlinx.coroutines.flow.asStateFlow
  *  3. the output mix, session 0 (device-dependent).
  * If none delivers data, the bars stay flat: we never fake movement.
  */
-@MainThread
 object VisualizerEngine {
     const val BAND_COUNT = 16
 
@@ -33,6 +37,9 @@ object VisualizerEngine {
     private const val MAX_RATE_MILLIHZ = 20_000
     private const val PREFS = "visualizer"
     private const val KEY_GAIN = "gain"
+
+    private val worker: Handler = Handler(HandlerThread("visualizer").apply { start() }.looper)
+    private val main = Handler(Looper.getMainLooper())
 
     private var visualizer: Visualizer? = null
     private var sessionId: Int? = null
@@ -77,9 +84,16 @@ object VisualizerEngine {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
+    /** Starts (or keeps) capturing [audioSessionId]; returns at once, the work runs on the worker. */
     fun attach(context: Context, audioSessionId: Int) {
+        val app = context.applicationContext
+        worker.removeCallbacksAndMessages(null)
+        worker.post { attachNow(app, audioSessionId) }
+    }
+
+    private fun attachNow(context: Context, audioSessionId: Int) {
         if (!hasPermission(context)) {
-            release()
+            releaseNow()
             clearBars()
             setStatus(VisualizerStatus.NEEDS_PERMISSION)
             return
@@ -93,7 +107,7 @@ object VisualizerEngine {
             return
         }
 
-        release()
+        releaseNow()
         try {
             val v = Visualizer(audioSessionId)
             v.setEnabled(false) // capture size can only change while disabled
@@ -111,7 +125,7 @@ object VisualizerEngine {
         } catch (t: Throwable) {
             // RuntimeException / UnsupportedOperationException when the device refuses the session.
             Log.w(TAG, "Visualizer unavailable for session $audioSessionId", t)
-            release()
+            releaseNow()
             clearBars()
             setStatus(VisualizerStatus.NO_AUDIO)
         }
@@ -119,12 +133,21 @@ object VisualizerEngine {
 
     /** Paused or screen off: stop capturing, flatten the bars, keep the session for later. */
     fun pause() {
+        worker.removeCallbacksAndMessages(null)
+        worker.post { pauseNow() }
+    }
+
+    private fun pauseNow() {
         runCatching { visualizer?.setEnabled(false) }
         clearBars()
         setStatus(VisualizerStatus.IDLE)
     }
 
     fun release() {
+        worker.post { releaseNow() }
+    }
+
+    private fun releaseNow() {
         visualizer?.let { v ->
             runCatching { v.setEnabled(false) }
             runCatching { v.release() }
@@ -168,6 +191,6 @@ object VisualizerEngine {
     private fun setStatus(newStatus: VisualizerStatus) {
         if (newStatus == status) return
         status = newStatus
-        onStatus?.invoke(newStatus)
+        main.post { onStatus?.invoke(newStatus) }
     }
 }

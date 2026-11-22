@@ -40,10 +40,8 @@ class PlaybackService : MediaSessionService() {
             .apply {
                 // A known session id lets the visualizer attach before playback starts.
                 audioSessionId = HubAudio.localSessionId(this@PlaybackService)
-                // Start with the bundled tracks so the very first Play works anywhere.
-                setMediaItems(demoItems())
+                // Starts empty: songs are loaded when the user picks something to play.
                 repeatMode = Player.REPEAT_MODE_ALL
-                prepare()
             }
 
         player.addListener(object : Player.Listener {
@@ -65,8 +63,6 @@ class PlaybackService : MediaSessionService() {
         HubController.onLocalPlayerEvent(player)
     }
 
-    private fun demoItems(): List<MediaItem> = DemoLibrary.localTracks(this).map(MediaItems::from)
-
     private inner class SessionCallback : MediaSession.Callback {
         /** Controllers send items without a playable uri; restore it from RequestMetadata. */
         override fun onAddMediaItems(
@@ -81,7 +77,9 @@ class PlaybackService : MediaSessionService() {
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = Futures.immediateFuture(
-            MediaSession.MediaItemsWithStartPosition(demoItems(), 0, 0L),
+            MediaSession.MediaItemsWithStartPosition(
+                HubController.library.tracks.value.take(RESUME_LIMIT).map(MediaItems::from), 0, 0L,
+            ),
         )
     }
 
@@ -100,5 +98,9 @@ class PlaybackService : MediaSessionService() {
         }
         session = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val RESUME_LIMIT = 200
     }
 }

@@ -33,7 +33,7 @@ import com.sen0413.ultimatewidget.ui.views.ArtworkView
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** Everything our own player can play: bundled demo tracks and the phone's audio files. */
+/** Everything our own player can play: the phone's audio files. */
 class LibraryScreen(host: Host) : Screen(host) {
     private sealed class Row {
         data class Header(val title: String) : Row()
@@ -52,6 +52,13 @@ class LibraryScreen(host: Host) : Screen(host) {
             context.pill(context.getString(R.string.library_allow)) { host.requestMediaAccess() },
             ViewGroup.LayoutParams.WRAP_CONTENT, top = dp(12),
         )
+    }
+
+    /** Access granted but MediaStore has no music: say where songs come from. */
+    private val emptyCard = context.card {
+        add(context.label(context.getString(R.string.library_empty_title), TextRole.HEADING))
+        add(context.label(context.getString(R.string.library_empty_body), TextRole.CAPTION, Ink.MIST), top = dp(6))
+        visibility = View.GONE
     }
 
     private val adapter = object : BaseAdapter() {
@@ -85,21 +92,16 @@ class LibraryScreen(host: Host) : Screen(host) {
         add(context.label(context.getString(R.string.library_title), TextRole.DISPLAY))
         add(subtitle, top = dp(4))
         add(permissionCard, top = dp(16))
+        add(emptyCard, top = dp(16))
         add(list, height = 0, weight = 1f, top = dp(8))
     }
 
     override fun onLibrary(tracks: List<LocalTrack>) {
         this.tracks = tracks
-        val demo = tracks.withIndex().filter { it.value.coverRes != 0 }
-        val device = tracks.withIndex().filter { it.value.coverRes == 0 }
         rows = buildList {
-            if (demo.isNotEmpty()) {
-                add(Row.Header(context.getString(R.string.library_section_demo)))
-                demo.forEach { add(Row.Song(it.value, it.index)) }
-            }
-            if (device.isNotEmpty()) {
+            if (tracks.isNotEmpty()) {
                 add(Row.Header(context.getString(R.string.library_section_device)))
-                device.forEach { add(Row.Song(it.value, it.index)) }
+                tracks.forEachIndexed { index, track -> add(Row.Song(track, index)) }
             }
         }
         subtitle.text = context.getString(R.string.library_subtitle, tracks.size)
@@ -108,7 +110,9 @@ class LibraryScreen(host: Host) : Screen(host) {
     }
 
     override fun onPermissionsChanged() {
-        permissionCard.visibility = if (HubController.library.hasPermission()) View.GONE else View.VISIBLE
+        val granted = HubController.library.hasPermission()
+        permissionCard.visibility = if (granted) View.GONE else View.VISIBLE
+        emptyCard.visibility = if (granted && tracks.isEmpty()) View.VISIBLE else View.GONE
     }
 
     override fun render(state: HubState) {

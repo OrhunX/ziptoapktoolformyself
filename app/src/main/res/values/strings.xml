@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Ultimate Music Widget</string>
-    <string name="widget_label">Ultimate Music Widget</string>
+    <string name="widget_label">Ultimate · Medium 4×2</string>
+    <string name="widget_label_mini">Ultimate · Mini 1×1</string>
+    <string name="widget_label_small">Ultimate · Small 2×1</string>
+    <string name="widget_label_square">Ultimate · Square 2×2</string>
+    <string name="widget_label_slim">Ultimate · Slim 4×1</string>
+    <string name="widget_label_large">Ultimate · Large 4×4</string>
+    <string name="widget_description_mini">Cover and play button. Resize it any time for more.</string>
+    <string name="widget_description_small">Song, play and next, in one row.</string>
+    <string name="widget_description_square">Cover, song and controls in a square.</string>
+    <string name="widget_description_slim">A full-width strip with cover, song, visualizer and controls.</string>
+    <string name="widget_description_large">Everything: big cover, visualizer, shuffle, repeat and the up-next list.</string>
     <string name="widget_description">One widget for every music app, with a visualizer that follows the real audio.</string>
     <string name="listener_label">Ultimate Widget media control</string>
 
@@ -12,7 +22,7 @@
     <string name="preview_title" translatable="false">Night Train</string>
     <string name="unknown_title">Unknown title</string>
     <string name="unknown_artist">Unknown artist</string>
-    <string name="demo_artist">Demo Band</string>
+    <string name="widget_idle_artist">Tap play to start</string>
 
     <!-- Widget -->
     <string name="video_chip">▶ Video</string>
@@ -55,10 +65,16 @@
     <string name="library_title">Library</string>
     <string name="library_subtitle">%1$d songs on this phone</string>
     <string name="library_permission_title">Play the music on this phone</string>
-    <string name="library_permission_body">Allow access to audio files to list your own songs next to the bundled demo tracks.</string>
+    <string name="library_permission_body">Allow access to the audio files on this phone to play them here, with a visualizer that follows the real sound.</string>
     <string name="library_allow">Allow access</string>
-    <string name="library_section_demo">Bundled demo tracks</string>
     <string name="library_section_device">On this phone</string>
+    <string name="library_empty_title">No songs found on this phone</string>
+    <string name="library_empty_body">Copy music into the Music or Download folder and it shows up here. Songs from Spotify or YouTube Music are saved with the heart while they play.</string>
+    <string name="welcome_title">Let\'s add your music</string>
+    <string name="welcome_body">Play the songs on this phone, or play something in Spotify or YouTube Music and tap the heart to save it to a playlist. Connect Spotify in Settings for exact, background playback.</string>
+    <string name="welcome_allow">Allow music access</string>
+    <string name="welcome_setup">Set up sources</string>
+    <string name="welcome_library">Open Library</string>
 
     <!-- Playlists -->
     <string name="playlists_title">Hub playlists</string>
@@ -109,7 +125,7 @@
     <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v1.3\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Demo music and covers were generated for this project. Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
+    <string name="about_body">The Ultimate Music Widget · v1.4\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>

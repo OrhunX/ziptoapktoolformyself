@@ -6,6 +6,12 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 1.4
+
+- **No sample songs.** The bundled demo tracks and covers are gone; first-time users see a welcome card (allow music access, open the Library, set up sources).
+- **Smoother song starts.** Widgets and the lock-screen card are drawn on a background render thread (newest state only), and the audio visualizer attaches on its own thread, so tapping a song no longer freezes the app for a moment.
+- **Six widgets in the widget list.** Mini 1×1, Small 2×1, Square 2×2, Slim 4×1, Medium 4×2 and Large 4×4 are separate entries, each placed at its own size (all still resizable).
+
 ## What's new in 1.3
 
 - **Spotify through its official SDK.** Spotify ignores "play this song" requests from apps it does not know and resumes whatever it had paused. Version 1.3 uses the Spotify Android SDK (App Remote, `app/libs`) to play the exact track (`spotify:track:...`) in the background. Approve once in Settings → Spotify (Spotify Premium is required by Spotify to pick songs; the app is in Spotify's development mode, so at most 5 approved accounts).
@@ -49,7 +55,7 @@ Unit tests (18): `./gradlew test`.
 | Area | What it does |
 |---|---|
 | **Player** | Artwork, title, seek bar, transport. Four real-audio visualizer styles: Ring, Bars, Mirror, Wave. Colors of the whole screen come from the album cover. |
-| **Library** | Three bundled demo tracks plus every audio file on the phone (MediaStore). |
+| **Library** | Every audio file on the phone (MediaStore). The app ships without sample songs; a welcome card guides first-time users. |
 | **Hub playlists** | Playlists that mix local files with songs from Spotify, YouTube Music or any player. Each entry is played by the app it belongs to; the hub moves on when a song ends. Stored in SQLite. |
 | **Favorites** | The heart (in the app and on the widget) saves the current song from *any* app. |
 | **Setup** | Each permission next to the feature it unlocks; appearance (Night / Glass), lock-screen player, visualizer sensitivity, a shortcut to hide Spotify / YouTube Music cards. |
@@ -65,7 +71,7 @@ Unit tests (18): `./gradlew test`.
    and the heart work. Resize it to 2×1 and 4×4. Long-press › reconfigure to restyle it.
 4. **Hub** — play a song in Spotify, come back: the source chip turns green, the widget and
    the app now control Spotify. Tap the heart: the Spotify song lands in *Favorites*.
-5. **Hub playlist** — Playlists › New playlist › add a demo track from the Library (＋) and
+5. **Hub playlist** — Playlists › New playlist › add a song from the Library (＋) and
    the current Spotify song (*Add current song*) › **Play all**. The hub plays each entry
    in its own app and advances by itself.
 6. **Video chip** — while Spotify plays, **Video** opens the song in Spotify; controls stay
@@ -131,4 +137,3 @@ app/src/main/java/com/sen0413/ultimatewidget/
   exporting playlists to those services.
 
 Fonts: Space Grotesk and DM Sans, SIL Open Font License (see `FONT_LICENSE_*.txt`).
-Demo music and covers were generated for this project.
