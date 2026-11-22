@@ -194,6 +194,22 @@ class PlaylistStore(context: Context) {
         publish()
     }
 
+    /** Remembers the app's own id for songs (e.g. "spotify:track:..."), so they play exactly. */
+    suspend fun setMediaIds(ids: Map<Long, String>) = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            for ((entryId, mediaId) in ids) {
+                db.update(T_ENTRIES, ContentValues().apply { put("media_id", mediaId) }, "id = ?", arrayOf(entryId.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        publish()
+    }
+
     /** Memory lookup, safe to call from the main thread on every state change. */
     fun isFavorite(title: String, artist: String): Boolean = TrackMatcher.key(title, artist) in favoriteKeys
 

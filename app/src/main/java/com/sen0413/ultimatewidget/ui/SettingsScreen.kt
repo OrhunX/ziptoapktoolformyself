@@ -21,6 +21,7 @@ import com.sen0413.ultimatewidget.R
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
+import com.sen0413.ultimatewidget.hub.SpotifyLink
 import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.chip
@@ -76,6 +77,8 @@ class SettingsScreen(host: Host) : Screen(host) {
             { VisualizerEngine.hasPermission(context) }) { host.requestMicrophone() },
         SetupRow(R.string.setup_access, R.string.setup_access_body, R.string.open_settings,
             { listenerEnabled }) { host.openNotificationAccess() },
+        SetupRow(R.string.setup_spotify, R.string.setup_spotify_body, R.string.connect,
+            { SpotifyLink.isAuthorized(context) }) { host.connectSpotify() },
         SetupRow(R.string.setup_media, R.string.setup_media_body, R.string.grant,
             { HubController.library.hasPermission() }) { host.requestMediaAccess() },
         SetupRow(R.string.setup_notifications, R.string.setup_notifications_body, R.string.grant,

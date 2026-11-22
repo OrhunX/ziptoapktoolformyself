@@ -27,6 +27,7 @@ import android.window.OnBackInvokedDispatcher
 import com.sen0413.ultimatewidget.R
 import com.sen0413.ultimatewidget.data.EntryDraft
 import com.sen0413.ultimatewidget.hub.HubController
+import com.sen0413.ultimatewidget.hub.SpotifyLink
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.add
@@ -140,6 +141,31 @@ class MainActivity : Activity(), Host {
         scope.launch { HubController.library.tracks.collect { tracks -> screens.values.forEach { it.onLibrary(tracks) } } }
         scope.launch { HubController.playlists.playlists.collect { lists -> screens.values.forEach { it.onPlaylists(lists) } } }
         scope.launch { HubController.messages.collect { toast(it) } }
+        scope.launch { maybeLinkSpotify() }
+    }
+
+    /**
+     * Spotify's SDK needs the user's approval once. Asked automatically the first time
+     * Spotify songs are in a playlist; later, a quick silent refresh (at most twice a day)
+     * gives the token used to look up exact ids for songs that still lack one.
+     */
+    private suspend fun maybeLinkSpotify() {
+        when {
+            SpotifyLink.validToken(this) != null -> HubController.resolveSpotifyIds()
+            !HubController.hasSpotifySongs() -> Unit
+            SpotifyLink.shouldAskFirstTime(this) -> SpotifyLink.authorize(this)
+            SpotifyLink.isAuthorized(this) && HubController.spotifySongsWithoutId().isNotEmpty() &&
+                SpotifyLink.shouldRefreshToken(this) -> SpotifyLink.authorize(this)
+        }
+    }
+
+    override fun connectSpotify() {
+        if (!SpotifyLink.isInstalled(this)) {
+            toast(getString(R.string.spotify_not_installed))
+            return
+        }
+        spotifyAuthByUser = true
+        SpotifyLink.authorize(this)
     }
 
     override fun onResume() {
@@ -338,6 +364,8 @@ class MainActivity : Activity(), Host {
 
     private var imageCallback: ((Uri) -> Unit)? = null
 
+    private var spotifyAuthByUser = false
+
     override fun pickImage(onPicked: (Uri) -> Unit) {
         imageCallback = onPicked
         val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -351,6 +379,13 @@ class MainActivity : Activity(), Host {
     @Deprecated("Framework Activity results; this app has no AndroidX activity dependency.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == SpotifyLink.REQUEST_AUTH) {
+            val ok = SpotifyLink.onAuthResult(this, resultCode, data)
+            if (spotifyAuthByUser) toast(getString(if (ok) R.string.spotify_connected else R.string.spotify_failed))
+            spotifyAuthByUser = false
+            screens.values.forEach { it.onPermissionsChanged() }
+            return
+        }
         if (requestCode == REQUEST_IMAGE) {
             val uri = data?.data
             if (resultCode == RESULT_OK && uri != null) imageCallback?.invoke(uri)

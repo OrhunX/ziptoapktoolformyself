@@ -25,6 +25,8 @@ interface Host {
     /** Lets the user choose a photo (for playlist covers). */
     fun pickImage(onPicked: (android.net.Uri) -> Unit)
     fun open(tab: Tab)
+    /** Asks the user to approve Spotify's SDK (exact songs, played in the background). */
+    fun connectSpotify()
 }
 
 /**

@@ -101,9 +101,15 @@
     <string name="grant">Allow</string>
     <string name="open_settings">Open</string>
     <string name="add">Add</string>
+    <string name="connect">Connect</string>
+    <string name="setup_spotify">Spotify</string>
+    <string name="setup_spotify_body">Approve once so playlist songs start exactly, from the beginning, while Spotify stays in the background. Needs Spotify Premium.</string>
+    <string name="spotify_connected">Spotify connected</string>
+    <string name="spotify_failed">Spotify did not approve the connection</string>
+    <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v1.2\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Demo music and covers were generated for this project.</string>
+    <string name="about_body">The Ultimate Music Widget · v1.3\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Demo music and covers were generated for this project. Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>

@@ -13,8 +13,11 @@ android {
         applicationId = "com.sen0413.ultimatewidget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2"
+        versionCode = 5
+        versionName = "1.3"
+        // Redirect URI registered in the Spotify developer dashboard: ultimatewidget://spotify-callback
+        manifestPlaceholders["redirectSchemeName"] = "ultimatewidget"
+        manifestPlaceholders["redirectHostName"] = "spotify-callback"
     }
 
     // One fixed debug key (Android's standard debug credentials) so every CI build installs as an
@@ -57,6 +60,12 @@ dependencies {
     implementation(libs.androidx.palette)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core) // QR codes for playlist share codes (encoding only)
+    // Spotify Android SDK (Apache 2.0), from github.com/spotify/android-sdk: App Remote plays exact
+    // songs in the background; Auth gets the one-time approval. Gson and Custom Tabs are their deps.
+    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation(files("libs/spotify-auth-release-2.1.0.aar"))
+    implementation(libs.gson)
+    implementation(libs.androidx.browser)
 
     testImplementation(libs.junit)
 }

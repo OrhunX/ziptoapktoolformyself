@@ -6,6 +6,13 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 1.3
+
+- **Spotify through its official SDK.** Spotify ignores "play this song" requests from apps it does not know and resumes whatever it had paused. Version 1.3 uses the Spotify Android SDK (App Remote, `app/libs`) to play the exact track (`spotify:track:...`) in the background. Approve once in Settings → Spotify (Spotify Premium is required by Spotify to pick songs; the app is in Spotify's development mode, so at most 5 approved accounts).
+- Songs saved without a Spotify id are looked up once through the Web API (the token from approving the app) and learned automatically while they play.
+- **A chosen song always starts from the beginning**, even when it is the song the app had paused (Spotify, YouTube Music and local files).
+- When the SDK is unavailable (not approved, Free account, Spotify unreachable), the app falls back to the shared media session as before.
+
 ## What's new in 1.2
 
 | Area | Change |

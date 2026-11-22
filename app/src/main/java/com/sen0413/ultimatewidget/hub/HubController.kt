@@ -65,6 +65,7 @@ object HubController {
     private const val RECHECK_MS = 2_500L
     private const val MAX_NUDGES = 3
     private const val TAKEOVER_GRACE_MS = 4_000L
+    private const val RESUME_SLACK_MS = 3_000L
 
     val scope: CoroutineScope = MainScope()
 
@@ -133,6 +134,10 @@ object HubController {
         var waitingForTap = false
         /** We opened the other app on top of ours (only while the user was in our app); come back. */
         var returnToApp = false
+        /** Played through Spotify's SDK (exact song) rather than the shared media session. */
+        var viaSpotifySdk = false
+        /** We already made sure the requested song started from the beginning. */
+        var restartChecked = false
         var queue: List<QueueEntry> = buildQueue()
             private set
 
@@ -168,6 +173,9 @@ object HubController {
             visualizerStatus = status
             publish()
         }
+
+        SpotifyLink.onPlayerState = ::onSpotifyState
+        SpotifyLink.onAuthorized = { scope.launch { resolveSpotifyIds() } }
 
         notificationAccess = isListenerEnabled()
         if (notificationAccess) sessions.start()
@@ -447,6 +455,8 @@ object HubController {
         s.nudges = 0
         s.waitingForTap = false
         s.returnToApp = false
+        s.restartChecked = false
+        s.viaSpotifySdk = false
         HubNotifications.cancelContinue(app)
         val entry = s.entry
 
@@ -473,9 +483,13 @@ object HubController {
             s.misses = 0
         } else {
             val pkg = entry.sourcePackage ?: return missed(s)
+            s.viaSpotifySdk = pkg == KnownApps.SPOTIFY && SpotifyLink.isPlayableId(entry.mediaId) &&
+                SpotifyLink.isAuthorized(app) && SpotifyLink.isInstalled(app)
             // Stop everything first, including the same app: the old song must not keep playing
             // while the next one is requested (that is what made "next" look ignored).
-            pauseOthers(keepPackage = null, keepLocal = false)
+            // Through Spotify's SDK the new song replaces the old one directly, so Spotify
+            // itself is not paused (a pause racing the play command could stop the new song).
+            pauseOthers(keepPackage = if (s.viaSpotifySdk) KnownApps.SPOTIFY else null, keepLocal = false)
             active = SourceKind.EXTERNAL
             sessions.preferredPackage = pkg
             s.watch = ExternalTrackWatch(entry.title, SystemClock.elapsedRealtime())
@@ -498,6 +512,23 @@ object HubController {
         val entry = s.entry
         val pkg = entry.sourcePackage ?: return
         s.attempts++
+        val spotifyId = entry.mediaId
+        if (s.viaSpotifySdk && spotifyId != null) {
+            // Spotify's SDK: the exact song, from the beginning, without opening Spotify.
+            val generation = s.generation
+            SpotifyLink.play(app, spotifyId) { ok ->
+                val current = session
+                if (ok || current == null || current.generation != generation) return@play
+                // Not possible right now (not approved, Spotify unreachable, Free account):
+                // fall back to the shared media session for this song.
+                current.viaSpotifySdk = false
+                scope.launch {
+                    pauseOthers(keepPackage = null, keepLocal = false)
+                    if (session === current && current.generation == generation) requestExternal(current)
+                }
+            }
+            return
+        }
         val controller = sessions.controllerFor(pkg)
         if (controller != null) {
             ask(controller, entry, s, preferId = s.attempts == 1)
@@ -560,10 +591,12 @@ object HubController {
                 s.nudges++
                 controller?.transportControls?.play()
             }
+            if (controller != null) ensureFromStart(s, controller)
             return
         }
         if (controller != null && watch.matches(title)) {
             // The requested song is loaded: only now is "play" safe (never on another song).
+            ensureFromStart(s, controller)
             if (!playing && s.nudges < MAX_NUDGES) {
                 s.nudges++
                 controller.transportControls.play()
@@ -580,10 +613,83 @@ object HubController {
             return
         }
         // A wrong song may be playing (the app ignored the request): keep it quiet and ask again.
-        if (controller != null && playing) controller.transportControls.pause()
+        // (Not through Spotify's SDK: there the old title only lingers until the new song loads.)
+        if (controller != null && playing && !s.viaSpotifySdk) controller.transportControls.pause()
         if (s.attempts < 3) requestExternal(s)
         scheduleCheck(generation, RECHECK_MS)
     }
+
+    /**
+     * A chosen song always starts from the beginning, even when it is the song the app had
+     * paused (apps often just resume it). The position is compared with the time since we
+     * asked, so a song that legitimately started a few seconds ago is left alone.
+     */
+    private fun ensureFromStart(s: ActiveSession, controller: PlatformController) {
+        if (s.restartChecked) return
+        val state = controller.playbackState ?: return
+        s.restartChecked = true
+        val now = SystemClock.elapsedRealtime()
+        var position = state.position
+        if (state.state == PlaybackState.STATE_PLAYING && state.lastPositionUpdateTime > 0L) {
+            position += ((now - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
+        }
+        val sinceRequest = now - s.startedAt
+        if (position > sinceRequest + RESUME_SLACK_MS) {
+            if (s.viaSpotifySdk) SpotifyLink.seekToStart() else controller.transportControls.seekTo(0L)
+        }
+    }
+
+    /**
+     * Spotify (through its SDK) reports the song it plays with its exact id. When that is the
+     * song the playlist asked for and we did not know its id yet, remember it: next time it
+     * is played exactly.
+     */
+    private fun onSpotifyState(state: com.spotify.protocol.types.PlayerState) {
+        val s = session ?: return
+        val entry = s.entry
+        if (entry.sourcePackage != KnownApps.SPOTIFY || SpotifyLink.isPlayableId(entry.mediaId)) return
+        val track = state.track ?: return
+        val uri = track.uri
+        val name = track.name
+        if (!SpotifyLink.isPlayableId(uri) || name.isNullOrBlank()) return
+        if (!TrackMatcher.sameTitle(entry.title, name)) return
+        scope.launch { playlists.setMediaIds(sameSongIds(entry).associateWith { uri }) }
+    }
+
+    /** The same song saved in several playlists (and Favorites) shares one Spotify id. */
+    private fun sameSongIds(entry: PlaylistEntry): List<Long> {
+        val key = TrackMatcher.key(entry.title, entry.artist)
+        return playlists.playlists.value.flatMap { it.entries }
+            .filter {
+                it.sourcePackage == entry.sourcePackage && !SpotifyLink.isPlayableId(it.mediaId) &&
+                    TrackMatcher.key(it.title, it.artist) == key
+            }
+            .map { it.id }
+    }
+
+    /**
+     * Looks up the Spotify id of every saved Spotify song that does not have one yet (needs
+     * the short-lived token from approving the app), so all of them can be played exactly.
+     */
+    suspend fun resolveSpotifyIds() {
+        if (SpotifyLink.validToken(app) == null) return
+        val missing = spotifySongsWithoutId()
+        if (missing.isEmpty()) return
+        val found = HashMap<Long, String>()
+        for ((_, group) in missing.groupBy { TrackMatcher.key(it.title, it.artist) }) {
+            val first = group.first()
+            val uri = SpotifyLink.findTrackUri(app, first.title, first.artist) ?: continue
+            group.forEach { found[it.id] = uri }
+        }
+        playlists.setMediaIds(found)
+    }
+
+    fun spotifySongsWithoutId(): List<PlaylistEntry> =
+        playlists.playlists.value.flatMap { it.entries }
+            .filter { it.sourcePackage == KnownApps.SPOTIFY && !SpotifyLink.isPlayableId(it.mediaId) }
+
+    fun hasSpotifySongs(): Boolean =
+        playlists.playlists.value.any { p -> p.entries.any { it.sourcePackage == KnownApps.SPOTIFY } }
 
     /** Skips a song that could not be started; ends the playlist when nothing can be played. */
     private suspend fun missed(s: ActiveSession) {
@@ -856,6 +962,7 @@ object HubController {
                 positionMs = snapshot.positionAt(now), durationMs = snapshot.track?.durationMs ?: 0L,
             )
             if (!wasArmed && watch.isArmed) {
+                externalController?.let { ensureFromStart(s, it) }
                 HubNotifications.cancelContinue(app)
                 if (s.returnToApp) {
                     // The song plays in the other app now; control stays with the hub.

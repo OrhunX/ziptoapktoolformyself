@@ -255,6 +255,7 @@ class LockPlayerActivity : Activity(), Host {
     override fun pickPlaylistFor(draft: EntryDraft) = unlockThen(Tab.PLAYLISTS)
     override fun promptNewPlaylist(onCreated: (Long) -> Unit) = unlockThen(Tab.PLAYLISTS)
     override fun open(tab: Tab) = unlockThen(tab)
+    override fun connectSpotify() = unlockThen(Tab.SETTINGS)
     override fun pickImage(onPicked: (android.net.Uri) -> Unit) = unlockThen(Tab.PLAYLISTS)
 
     override fun toast(text: CharSequence) {
