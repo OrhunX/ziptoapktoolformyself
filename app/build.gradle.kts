@@ -13,8 +13,8 @@ android {
         applicationId = "com.sen0413.ultimatewidget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.7"
+        versionCode = 10
+        versionName = "1.8"
         // Redirect URI registered in the Spotify developer dashboard: ultimatewidget://spotify-callback
         manifestPlaceholders["redirectSchemeName"] = "ultimatewidget"
         manifestPlaceholders["redirectHostName"] = "spotify-callback"

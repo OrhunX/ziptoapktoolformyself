@@ -68,8 +68,8 @@ object HubController {
     private const val TAKEOVER_GRACE_MS = 4_000L
     private const val RESUME_SLACK_MS = 3_000L
     private const val ART_STABLE_MS = 2_500L
-    /** A YouTube video id, as YouTube Music reports it for the playing song. */
-    private val YOUTUBE_ID = Regex("^[A-Za-z0-9_-]{11}$")
+    private const val YT_LOOKUP_MS = 5_000L
+    private const val MAX_YT_QUEUE_LOOKUPS = 15
     private const val MAX_RESTARTS = 3
     private const val RESTART_VERIFY_MS = 1_500L
     private const val MAX_SPOTIFY_LOOKUPS = 150
@@ -143,6 +143,10 @@ object HubController {
         var returnToApp = false
         /** We opened YouTube Music over the home screen (widget, background): send it back there. */
         var returnHome = false
+        /** Video ids loaded into YouTube Music's own queue for this playlist (switched in the background). */
+        var ytQueue: Set<String> = emptySet()
+        /** The app already moved on to our next song by itself: play that entry without asking again. */
+        var adoptNext = false
         /** Played through Spotify's SDK (exact song) rather than the shared media session. */
         var viaSpotifySdk = false
         /** We already made sure the requested song started from the beginning. */
@@ -414,6 +418,7 @@ object HubController {
         }
         session = ActiveSession(name, ids, entries, order, order.indexOf(start))
         scope.launch { playlists.recordPlay(ids) }
+        prefetchYouTubeIds(entries)
         playEntry(session!!.pos)
     }
 
@@ -503,6 +508,19 @@ object HubController {
             s.misses = 0
         } else {
             val pkg = entry.sourcePackage ?: return missed(s)
+            if (s.adoptNext) {
+                // e.g. YouTube Music went on to the next song of its queue, which is our next song.
+                s.adoptNext = false
+                active = SourceKind.EXTERNAL
+                sessions.preferredPackage = pkg
+                s.watch = ExternalTrackWatch(entry.title, SystemClock.elapsedRealtime())
+                s.query = listOf(entry.title, entry.artist).filter { it.isNotBlank() }.joinToString(" ")
+                s.restartChecked = true // it starts at 0:00 by itself
+                s.misses = 0
+                scheduleCheck(s.generation, FIRST_CHECK_MS)
+                publish()
+                return
+            }
             s.viaSpotifySdk = pkg == KnownApps.SPOTIFY && SpotifyLink.isPlayableId(entry.mediaId) &&
                 SpotifyLink.isAuthorized(app) && SpotifyLink.isInstalled(app)
             // Stop everything first, including the same app: the old song must not keep playing
@@ -574,14 +592,92 @@ object HubController {
 
     /**
      * YouTube Music only follows "play this" from its media session when the request comes from
-     * apps it trusts (Assistant, Android Auto); from us it kept playing whatever it had loaded,
-     * so after the first song a playlist never moved on. It does follow intents: a watch link
-     * when we know the song's id, else its play-from-search screen, which starts the top result.
-     * Starting another app needs our app on screen or the "display over other apps" permission;
-     * without either, a "tap to continue" notification carries the same intent.
+     * apps it trusts (Assistant, Android Auto); from us it kept playing whatever it had loaded.
+     * It does follow basic commands from anyone (play, pause, skip to a queue item), and links.
+     *
+     * So the first YouTube Music song of a playlist opens YouTube Music once, with all of the
+     * playlist's YouTube Music songs as one temporary playlist in its queue; every later one is
+     * a background skip within that queue. Missing video ids are found with the unofficial
+     * search (YouTubeLink). Whatever fails falls back to a watch link, then to YouTube Music's
+     * search screen.
      */
     private fun requestYouTube(s: ActiveSession, entry: PlaylistEntry, pkg: String) {
-        val intent = youTubeIntent(pkg, entry, s)
+        val generation = s.generation
+        scope.launch {
+            var id = entry.mediaId?.takeIf(YouTubeLink::isVideoId)
+            if (id == null) {
+                id = kotlinx.coroutines.withTimeoutOrNull(YT_LOOKUP_MS) { YouTubeLink.findVideoId(entry.title, entry.artist) }
+                if (id != null) rememberYouTubeId(entry, id)
+            }
+            if (session !== s || s.generation != generation) return@launch
+            // 1. Already in YouTube Music's queue: switch in the background, no screen change.
+            if (s.attempts == 1 && id != null && id in s.ytQueue && skipInYouTubeQueue(pkg, entry, id)) return@launch
+            // 2. Open YouTube Music once: this song first, the playlist's other YouTube songs queued.
+            val intent = when {
+                id != null && s.attempts <= 2 -> {
+                    val list = if (s.attempts == 1) buildYouTubeQueue(s, pkg, id) else null
+                    if (session !== s || s.generation != generation) return@launch
+                    watchIntent(pkg, id, list)
+                }
+                else -> playFromSearchIntent(pkg, entry, s.query)
+            }
+            startYouTube(s, entry, intent)
+        }
+    }
+
+    /** Skips to the song inside YouTube Music's own queue (a command it accepts from any app). */
+    private fun skipInYouTubeQueue(pkg: String, entry: PlaylistEntry, id: String): Boolean {
+        val controller = sessions.controllerFor(pkg) ?: return false
+        val queue = controller.queue ?: return false
+        val item = queue.firstOrNull { it.description.mediaId == id }
+            ?: queue.firstOrNull { TrackMatcher.sameTitle(entry.title, it.description.title?.toString().orEmpty()) }
+            ?: return false
+        controller.transportControls.skipToQueueItem(item.queueId)
+        controller.transportControls.play()
+        return true
+    }
+
+    /**
+     * Makes one temporary YouTube playlist of the session's YouTube Music songs, starting with
+     * [firstId] and following the play order. Returns its list id, or null.
+     */
+    private suspend fun buildYouTubeQueue(s: ActiveSession, pkg: String, firstId: String): String? {
+        val rotated = s.order.indices.map { s.order[(s.pos + it) % s.order.size] }
+        val ids = ArrayList<String>()
+        ids += firstId
+        var lookups = 0
+        for (idx in rotated) {
+            if (ids.size >= YouTubeLink.MAX_QUEUE) break
+            val e = s.entries.getOrNull(idx) ?: continue
+            if (e.sourcePackage != pkg) continue
+            var id = e.mediaId?.takeIf(YouTubeLink::isVideoId)
+            if (id == null && lookups < MAX_YT_QUEUE_LOOKUPS) {
+                lookups++
+                id = kotlinx.coroutines.withTimeoutOrNull(YT_LOOKUP_MS) { YouTubeLink.findVideoId(e.title, e.artist) }
+                if (id != null) rememberYouTubeId(e, id)
+            }
+            if (id != null && id !in ids) ids += id
+        }
+        if (ids.size < 2) return null
+        val list = YouTubeLink.temporaryPlaylist(ids) ?: return null
+        s.ytQueue = ids.toSet()
+        return list
+    }
+
+    private fun watchIntent(pkg: String, id: String, list: String?): Intent {
+        val host = if (pkg == KnownApps.YOUTUBE_MUSIC) "https://music.youtube.com" else "https://www.youtube.com"
+        val url = "$host/watch?v=$id" + (list?.let { "&list=$it" } ?: "")
+        return Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+            .setPackage(pkg)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+
+    /**
+     * Opens YouTube Music with [intent]. Needs our app on screen or the "display over other
+     * apps" permission; without either, a "tap to continue" notification carries the intent.
+     */
+    private fun startYouTube(s: ActiveSession, entry: PlaylistEntry, intent: Intent) {
+        val pkg = entry.sourcePackage ?: return
         val visible = visibleScreens > 0
         val canStart = visible || Settings.canDrawOverlays(app)
         val started = canStart && runCatching { app.startActivity(intent) }
@@ -599,16 +695,30 @@ object HubController {
         }
     }
 
-    /** The exact song (watch link) on the first try when its id is known, else a search for it. */
-    private fun youTubeIntent(pkg: String, entry: PlaylistEntry, s: ActiveSession): Intent {
-        val id = entry.mediaId?.takeIf { YOUTUBE_ID.matches(it) }
-        if (id != null && s.attempts == 1) {
-            val host = if (pkg == KnownApps.YOUTUBE_MUSIC) "https://music.youtube.com" else "https://www.youtube.com"
-            return Intent(Intent.ACTION_VIEW, android.net.Uri.parse("$host/watch?v=$id"))
-                .setPackage(pkg)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    /** Remembers a song's YouTube video id (every copy of the song), for exact playback later. */
+    private fun rememberYouTubeId(entry: PlaylistEntry, id: String) {
+        val key = TrackMatcher.key(entry.title, entry.artist)
+        val ids = playlists.playlists.value.flatMap { it.entries }
+            .filter { it.sourcePackage == entry.sourcePackage && !YouTubeLink.isVideoId(it.mediaId) && TrackMatcher.key(it.title, it.artist) == key }
+            .map { it.id }
+            .plus(entry.id)
+            .distinct()
+        scope.launch { playlists.setMediaIds(ids.associateWith { id }) }
+    }
+
+    /** Looks up missing YouTube video ids for a playlist in the background, so it starts faster. */
+    private fun prefetchYouTubeIds(entries: List<PlaylistEntry>) {
+        val missing = entries.filter {
+            (it.sourcePackage == KnownApps.YOUTUBE_MUSIC || it.sourcePackage == KnownApps.YOUTUBE) &&
+                !YouTubeLink.isVideoId(it.mediaId)
+        }.distinctBy { TrackMatcher.key(it.title, it.artist) }.take(YouTubeLink.MAX_QUEUE)
+        if (missing.isEmpty()) return
+        scope.launch {
+            for (e in missing) {
+                val id = YouTubeLink.findVideoId(e.title, e.artist) ?: continue
+                rememberYouTubeId(e, id)
+            }
         }
-        return playFromSearchIntent(pkg, entry, s.query)
     }
 
     private fun goHome() {
@@ -813,6 +923,13 @@ object HubController {
      * Moves on. [auto] is a song that ended by itself: with "repeat one" it plays again.
      * At the end, "repeat all" (the default) starts over, reshuffled when shuffle is on.
      */
+    /** The entry advance(auto = true) would play next, or null. */
+    private fun nextEntry(s: ActiveSession): PlaylistEntry? = when {
+        s.pos + 1 < s.order.size -> s.entries.getOrNull(s.order[s.pos + 1])
+        repeat == RepeatMode.ALL && !shuffle -> s.entries.getOrNull(s.order[0])
+        else -> null
+    }
+
     private suspend fun advance(auto: Boolean) {
         val s = session ?: return
         if (auto) s.misses = 0
@@ -1068,21 +1185,40 @@ object HubController {
                 positionMs = snapshot.positionAt(now), durationMs = snapshot.track?.durationMs ?: 0L,
             )
             if (watch.isArmed) externalController?.let { ensureFromStart(s, it) }
-            if (!wasArmed && watch.isArmed) {
-                HubNotifications.cancelContinue(app)
+            // Come back as soon as the requested song is loaded (it may still be buffering),
+            // so the other app is on screen for as short a time as possible.
+            if ((s.returnHome || s.returnToApp) && watch.matches(snapshot.track?.title)) {
                 if (s.returnHome) {
                     s.returnHome = false
                     goHome()
                 }
                 if (s.returnToApp) {
-                    // The song plays in the other app now; control stays with the hub.
                     s.returnToApp = false
                     returnToApp()
                 }
             }
+            if (!wasArmed && watch.isArmed) {
+                HubNotifications.cancelContinue(app)
+                // Learn the song's YouTube video id from YouTube Music itself.
+                val playingId = snapshot.track?.mediaId
+                if ((s.entry.sourcePackage == KnownApps.YOUTUBE_MUSIC || s.entry.sourcePackage == KnownApps.YOUTUBE) &&
+                    !YouTubeLink.isVideoId(s.entry.mediaId) && YouTubeLink.isVideoId(playingId)
+                ) {
+                    rememberYouTubeId(s.entry, playingId!!)
+                }
+            }
             if (result == ExternalTrackWatch.Result.MOVED_ON) {
                 s.watch = null
-                externalController?.transportControls?.pause()
+                val next = nextEntry(s)
+                val newTitle = snapshot.track?.title
+                if (next != null && next.sourcePackage == s.entry.sourcePackage && repeat != RepeatMode.ONE &&
+                    !newTitle.isNullOrBlank() && TrackMatcher.sameTitle(next.title, newTitle)
+                ) {
+                    // The app moved on to exactly our next song (YouTube Music's queue): keep it.
+                    s.adoptNext = true
+                } else {
+                    externalController?.transportControls?.pause()
+                }
                 scope.launch { advance(auto = true) }
             }
         }

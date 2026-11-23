@@ -6,6 +6,12 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 1.8
+
+- **YouTube Music mostly in the background.** The first YouTube Music song of a playlist opens YouTube Music once, with all of the playlist's YouTube Music songs loaded as one temporary playlist (youtube.com `watch_videos` → `list=TL…`). Every later YouTube Music song is a background `skipToQueueItem` inside YouTube Music's own queue; when YouTube Music moves on to exactly the next hub song by itself, the hub keeps it instead of re-asking.
+- Missing video ids are found with YouTube Music's unofficial InnerTube search (no login, as ytmusicapi does), prefetched when a playlist starts and learned from YouTube Music while songs play. This can break whenever YouTube changes it; the app then falls back to watch links and YouTube Music's search screen.
+- When YouTube Music has to come to the screen, the app returns as soon as the requested song is loaded.
+
 ## What's new in 1.7
 
 - **YouTube Music playlists move on.** YouTube Music ignores media-session "play this" requests from apps it does not trust and kept playing whatever it had loaded, so only the first YouTube Music song of a playlist played. The hub now starts YouTube Music songs with intents: a `music.youtube.com/watch?v=` link when the song's id is known, otherwise YouTube Music's play-from-search screen. It returns to the app (or the home screen when started from the widget) once the song plays; without the "display over other apps" permission a "tap to continue" notification is used.
