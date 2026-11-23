@@ -6,6 +6,10 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 1.7
+
+- **YouTube Music playlists move on.** YouTube Music ignores media-session "play this" requests from apps it does not trust and kept playing whatever it had loaded, so only the first YouTube Music song of a playlist played. The hub now starts YouTube Music songs with intents: a `music.youtube.com/watch?v=` link when the song's id is known, otherwise YouTube Music's play-from-search screen. It returns to the app (or the home screen when started from the widget) once the song plays; without the "display over other apps" permission a "tap to continue" notification is used.
+
 ## What's new in 1.6
 
 - **Every chosen song starts at 0:00.** When an app resumes a paused song from its old position (YouTube Music does this when woken from another platform), the hub seeks to the start once the song really plays, verifies 1.5 s later and repeats up to three times.

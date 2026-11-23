@@ -68,6 +68,8 @@ object HubController {
     private const val TAKEOVER_GRACE_MS = 4_000L
     private const val RESUME_SLACK_MS = 3_000L
     private const val ART_STABLE_MS = 2_500L
+    /** A YouTube video id, as YouTube Music reports it for the playing song. */
+    private val YOUTUBE_ID = Regex("^[A-Za-z0-9_-]{11}$")
     private const val MAX_RESTARTS = 3
     private const val RESTART_VERIFY_MS = 1_500L
     private const val MAX_SPOTIFY_LOOKUPS = 150
@@ -139,6 +141,8 @@ object HubController {
         var waitingForTap = false
         /** We opened the other app on top of ours (only while the user was in our app); come back. */
         var returnToApp = false
+        /** We opened YouTube Music over the home screen (widget, background): send it back there. */
+        var returnHome = false
         /** Played through Spotify's SDK (exact song) rather than the shared media session. */
         var viaSpotifySdk = false
         /** We already made sure the requested song started from the beginning. */
@@ -468,6 +472,7 @@ object HubController {
         s.nudges = 0
         s.waitingForTap = false
         s.returnToApp = false
+        s.returnHome = false
         s.restartChecked = false
         s.restartAttempts = 0
         s.lastRestartAt = 0L
@@ -544,6 +549,10 @@ object HubController {
             }
             return
         }
+        if (pkg == KnownApps.YOUTUBE_MUSIC || pkg == KnownApps.YOUTUBE) {
+            requestYouTube(s, entry, pkg)
+            return
+        }
         val controller = sessions.controllerFor(pkg)
         if (controller != null) {
             ask(controller, entry, s, preferId = s.attempts == 1)
@@ -561,6 +570,50 @@ object HubController {
                 else -> _messages.tryEmit(app.getString(R.string.toast_app_not_running, entry.sourceLabel))
             }
         }
+    }
+
+    /**
+     * YouTube Music only follows "play this" from its media session when the request comes from
+     * apps it trusts (Assistant, Android Auto); from us it kept playing whatever it had loaded,
+     * so after the first song a playlist never moved on. It does follow intents: a watch link
+     * when we know the song's id, else its play-from-search screen, which starts the top result.
+     * Starting another app needs our app on screen or the "display over other apps" permission;
+     * without either, a "tap to continue" notification carries the same intent.
+     */
+    private fun requestYouTube(s: ActiveSession, entry: PlaylistEntry, pkg: String) {
+        val intent = youTubeIntent(pkg, entry, s)
+        val visible = visibleScreens > 0
+        val canStart = visible || Settings.canDrawOverlays(app)
+        val started = canStart && runCatching { app.startActivity(intent) }
+            .onFailure { Log.i(TAG, "Could not start $pkg: ${it.javaClass.simpleName}") }
+            .isSuccess
+        when {
+            started && visible -> s.returnToApp = true
+            started -> {
+                // Started from the widget or the lock screen: keep YouTube Music in the background.
+                val locked = app.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+                s.returnHome = !locked
+            }
+            HubNotifications.showContinue(app, entry.sourceLabel, entry.title, intent) -> s.waitingForTap = true
+            else -> _messages.tryEmit(app.getString(R.string.toast_app_not_running, entry.sourceLabel))
+        }
+    }
+
+    /** The exact song (watch link) on the first try when its id is known, else a search for it. */
+    private fun youTubeIntent(pkg: String, entry: PlaylistEntry, s: ActiveSession): Intent {
+        val id = entry.mediaId?.takeIf { YOUTUBE_ID.matches(it) }
+        if (id != null && s.attempts == 1) {
+            val host = if (pkg == KnownApps.YOUTUBE_MUSIC) "https://music.youtube.com" else "https://www.youtube.com"
+            return Intent(Intent.ACTION_VIEW, android.net.Uri.parse("$host/watch?v=$id"))
+                .setPackage(pkg)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        return playFromSearchIntent(pkg, entry, s.query)
+    }
+
+    private fun goHome() {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { app.startActivity(home) }
     }
 
     private fun ask(controller: PlatformController, entry: PlaylistEntry, s: ActiveSession, preferId: Boolean) {
@@ -1017,6 +1070,10 @@ object HubController {
             if (watch.isArmed) externalController?.let { ensureFromStart(s, it) }
             if (!wasArmed && watch.isArmed) {
                 HubNotifications.cancelContinue(app)
+                if (s.returnHome) {
+                    s.returnHome = false
+                    goHome()
+                }
                 if (s.returnToApp) {
                     // The song plays in the other app now; control stays with the hub.
                     s.returnToApp = false
