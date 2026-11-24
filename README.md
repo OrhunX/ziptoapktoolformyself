@@ -6,6 +6,12 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 2.3
+
+- **Spotify playlists move on again.** 2.2 required the song to be playing right before the next title appeared, but Spotify reports a short "buffering / paused" moment between songs, so the hub took Spotify's autoplay pick for the user's own choice and ended the playlist. The watch now remembers the furthest point the song reached while playing: once within 10 s of the end, the next title (even after that moment), the app stopping on its last seconds or jumping back to 0:00, or the song starting again by the app's own repeat all count as finished.
+- Repeat one: when the song ends the hub plays it again; if the app is already playing it again by itself, the hub keeps that going instead of pausing and asking again.
+- 2.2's protections stay: a title change while paused mid-song is ignored, and another song picked mid-song ends the playlist without touching it. Unit tests cover all of these cases (16 tests).
+
 ## What's new in 2.2
 
 - **No more songs starting on their own.** A Spotify / YouTube Music song now counts as finished only when it really reached its end (its last known position, extrapolated while playing, is within 10 s of its length) or the app stopped on its last seconds. A title change while paused (apps refresh their session on their own) is ignored, so the next song can no longer start by itself on a phone lying on the table.

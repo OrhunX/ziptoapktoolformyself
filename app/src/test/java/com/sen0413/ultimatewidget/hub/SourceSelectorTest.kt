@@ -87,6 +87,44 @@ class ExternalTrackWatchTest {
     }
 
     @Test
+    fun spotifysBufferingMomentBetweenSongsStillCountsAsFinished() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        // At the end Spotify reports "not playing" for a moment, then its next song playing.
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = false, nowMs = 199_500, positionMs = 196_000, durationMs = 200_000))
+        assertEquals(movedOn, watch.onMetadata("Autoplay Pick", isPlaying = false, nowMs = 200_200))
+    }
+
+    @Test
+    fun aNextTitleShownPausedAfterTheEndCountsAsFinished() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        assertEquals(movedOn, watch.onMetadata("Next In Context", isPlaying = false, nowMs = 202_000))
+    }
+
+    @Test
+    fun aSongResetToTheStartAfterItsEndCountsAsFinished() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        // Autoplay off: Spotify stops and jumps back to 0:00.
+        assertEquals(movedOn, watch.onMetadata("Blue Hours", isPlaying = false, nowMs = 201_000, positionMs = 0, durationMs = 200_000))
+    }
+
+    @Test
+    fun theAppsOwnRepeatStartingTheSongAgainCountsAsFinished() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        assertEquals(movedOn, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 201_500, positionMs = 500, durationMs = 200_000))
+    }
+
+    @Test
+    fun seekingBackMidSongIsNotTheEnd() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 60_000, positionMs = 1_000, durationMs = 200_000))
+    }
+
+    @Test
     fun missingMetadataIsNotTreatedAsANewSong() {
         val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
         assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000))

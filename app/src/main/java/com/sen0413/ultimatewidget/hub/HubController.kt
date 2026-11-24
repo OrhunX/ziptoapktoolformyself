@@ -1642,6 +1642,18 @@ object HubController {
                 s.watch = null
                 val next = nextEntry(s)
                 val newTitle = snapshot.track?.title
+                if (repeat == RepeatMode.ONE && snapshot.isPlaying && !newTitle.isNullOrBlank() &&
+                    TrackMatcher.sameTitle(s.entry.title, newTitle)
+                ) {
+                    // Repeat one, and the app is already playing the same song again (its own
+                    // repeat): keep it going instead of pausing and asking for it once more.
+                    s.watch = ExternalTrackWatch(s.entry.title, SystemClock.elapsedRealtime())
+                    s.restartChecked = true
+                    s.misses = 0
+                    autoSelectSource()
+                    publish()
+                    return
+                }
                 if (next != null && next.sourcePackage == s.entry.sourcePackage && repeat != RepeatMode.ONE &&
                     !newTitle.isNullOrBlank() && TrackMatcher.sameTitle(next.title, newTitle)
                 ) {
