@@ -157,6 +157,45 @@ class PlaylistStore(context: Context) {
         id
     }
 
+    /**
+     * Makes a playlist hold exactly [order], in that order: a Long keeps that existing song
+     * (with [mediaIds] filled in where given), an [EntryDraft] adds a new one; every other song
+     * of the playlist is removed. One transaction (used to update imported playlists).
+     */
+    suspend fun syncEntries(playlistId: Long, order: List<Any>, mediaIds: Map<Long, String>) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        val keep = order.filterIsInstance<Long>().toSet()
+        db.beginTransaction()
+        try {
+            for (e in queryEntries(playlistId)) {
+                if (e.id !in keep) db.delete(T_ENTRIES, "id = ?", arrayOf(e.id.toString()))
+            }
+            order.forEachIndexed { index, item ->
+                when (item) {
+                    is Long -> db.update(T_ENTRIES, ContentValues().apply {
+                        put("position", index)
+                        mediaIds[item]?.let { put("media_id", it) }
+                    }, "id = ? AND playlist_id = ?", arrayOf(item.toString(), playlistId.toString()))
+                    is EntryDraft -> db.insertOrThrow(T_ENTRIES, null, ContentValues().apply {
+                        put("playlist_id", playlistId)
+                        put("position", index)
+                        put("source_pkg", item.sourcePackage)
+                        put("source_label", item.sourceLabel)
+                        put("title", item.title)
+                        put("artist", item.artist)
+                        put("media_uri", item.mediaUri)
+                        put("duration", item.durationMs)
+                        put("media_id", item.mediaId)
+                    })
+                }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        publish()
+    }
+
     /** A playlist from a share code. Returns its id. */
     suspend fun importShared(shared: SharedPlaylist, entries: List<EntryDraft>): Long = withContext(Dispatchers.IO) {
         val id = insertPlaylist(shared.name)

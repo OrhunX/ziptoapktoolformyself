@@ -125,7 +125,7 @@
     <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v2.3\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
+    <string name="about_body">The Ultimate Music Widget · v2.4\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>
@@ -187,6 +187,18 @@
     <string name="import_apps_done">\"%1$s\" imported: %2$d songs</string>
     <string name="import_failed">That playlist could not be read</string>
     <string name="import_private">This playlist is private: sign in to YouTube Music</string>
+    <string name="import_update">Update</string>
+    <string name="import_update_all">Update imported playlists</string>
+    <string name="import_updating">Updating…</string>
+    <string name="import_update_failed">Could not update this playlist</string>
+    <string name="import_up_to_date">\"%1$s\" is up to date</string>
+    <string name="import_updated">\"%1$s\" updated: %2$d new, %3$d removed</string>
+    <string name="import_update_all_done">%1$d playlists updated: %2$d new songs, %3$d removed</string>
+    <string name="import_from_spotify_short">Spotify</string>
+    <string name="import_from_youtube_short">YouTube Music</string>
+    <string name="import_last_updated">From %1$s · updated %2$s</string>
+    <string name="auto_update_title">Update imported playlists</string>
+    <string name="auto_update_body">Once a day, playlists imported from Spotify and YouTube Music get the songs added there. Songs you added yourself stay; songs you removed do not come back.</string>
     <string name="setup_youtube">YouTube Music account</string>
     <string name="setup_youtube_body">Sign in to import your private playlists and Liked music. You sign in on Google\'s own page; the app keeps only YouTube Music\'s sign-in cookies.</string>
     <string name="sign_in">Sign in</string>

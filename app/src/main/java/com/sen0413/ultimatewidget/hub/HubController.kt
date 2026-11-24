@@ -230,6 +230,7 @@ object HubController {
             playlists.load()
             library.refresh()
             forgetGuessedYouTubeIds()
+            runCatching { PlaylistImporter.autoSync(app, playlists) }
         }
         // Favorites changed -> the heart on every surface follows.
         // Songs reordered or removed while the playlist plays: the session follows the new list.

@@ -6,6 +6,15 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 2.4
+
+- **Update imported playlists.** Playlists imported from Spotify or YouTube Music now remember where they came from. An "Update" button on the playlist (with "From Spotify · updated 2 hours ago"), "Update imported playlists" in the import menu, and an optional daily update in the background (Settings) bring them up to date:
+  - songs added on the platform come in, with covers, in the platform's order;
+  - songs removed on the platform are removed;
+  - songs you added yourself stay, after the platform's songs;
+  - songs from the platform that you removed do not come back.
+- Playlists imported before 2.4 do not know their source; import them once more to make them updatable.
+
 ## What's new in 2.3
 
 - **Spotify playlists move on again.** 2.2 required the song to be playing right before the next title appeared, but Spotify reports a short "buffering / paused" moment between songs, so the hub took Spotify's autoplay pick for the user's own choice and ended the playlist. The watch now remembers the furthest point the song reached while playing: once within 10 s of the end, the next title (even after that moment), the app stopping on its last seconds or jumping back to 0:00, or the song starting again by the app's own repeat all count as finished.

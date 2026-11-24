@@ -7,6 +7,7 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import com.sen0413.ultimatewidget.R
+import com.sen0413.ultimatewidget.data.ImportLinks
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.PlaylistImporter
 import com.sen0413.ultimatewidget.hub.PlaylistImporter.Source
@@ -31,17 +32,20 @@ class ImportDialogs(private val host: Host) {
     private fun dialog() = AlertDialog.Builder(context, android.R.style.Theme_Material_Dialog_Alert)
 
     fun show(onImported: (Long) -> Unit) {
-        val choices = arrayOf(
+        val canUpdate = ImportLinks.linkedIds(context).any { HubController.playlists.byId(it) != null }
+        val choices = listOfNotNull(
             context.getString(R.string.import_from_spotify),
             context.getString(R.string.import_from_youtube),
             context.getString(R.string.import_from_link),
-        )
+            if (canUpdate) context.getString(R.string.import_update_all) else null,
+        ).toTypedArray()
         dialog().setTitle(R.string.import_apps_title)
             .setItems(choices) { _, which ->
                 when (which) {
                     0 -> withSpotify { pickMine(Source.SPOTIFY, onImported) }
                     1 -> withYouTube { pickMine(Source.YOUTUBE_MUSIC, onImported) }
-                    else -> pasteLink(onImported)
+                    2 -> pasteLink(onImported)
+                    else -> updateAll()
                 }
             }
             .setNegativeButton(R.string.playlist_cancel, null)
@@ -150,7 +154,7 @@ class ImportDialogs(private val host: Host) {
                     host.toast(context.getString(R.string.import_failed))
                     continue
                 }
-                val (newId, count) = PlaylistImporter.save(context, HubController.playlists, source, playlist)
+                val (newId, count) = PlaylistImporter.save(context, HubController.playlists, source, id, playlist)
                 host.toast(context.getString(R.string.import_apps_done, playlist.name, count))
                 lastId = newId
                 done++
@@ -159,6 +163,40 @@ class ImportDialogs(private val host: Host) {
             if (done > 0) lastId?.let(onImported)
         }
     }
+
+    /** Updates one imported playlist from its platform; asks for approval or sign-in when needed. */
+    fun update(playlistId: Long) {
+        val wait = progress(context.getString(R.string.import_updating))
+        HubController.scope.launch {
+            val result = runCatching { PlaylistImporter.sync(context, HubController.playlists, playlistId) }
+            wait.dismiss()
+            val error = result.exceptionOrNull()
+            when {
+                error is PlaylistImporter.NeedsSpotifyApproval -> host.connectSpotify { update(playlistId) }
+                error is PlaylistImporter.NeedsYouTubeSignIn -> {
+                    host.toast(context.getString(R.string.import_private))
+                    host.signInYouTube { update(playlistId) }
+                }
+                error != null -> host.toast(context.getString(R.string.import_update_failed))
+                else -> host.toast(summary(result.getOrThrow()))
+            }
+        }
+    }
+
+    private fun updateAll() {
+        val wait = progress(context.getString(R.string.import_updating))
+        HubController.scope.launch {
+            val results = PlaylistImporter.syncAll(context, HubController.playlists)
+            wait.dismiss()
+            val added = results.sumOf { it.added }
+            val removed = results.sumOf { it.removed }
+            host.toast(context.getString(R.string.import_update_all_done, results.size, added, removed))
+        }
+    }
+
+    private fun summary(r: PlaylistImporter.SyncResult): String =
+        if (r.added == 0 && r.removed == 0) context.getString(R.string.import_up_to_date, r.name)
+        else context.getString(R.string.import_updated, r.name, r.added, r.removed)
 
     private fun progress(text: String): AlertDialog = dialog()
         .setView(context.row {

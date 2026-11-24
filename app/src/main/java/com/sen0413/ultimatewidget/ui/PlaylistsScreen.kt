@@ -23,6 +23,8 @@ import com.sen0413.ultimatewidget.data.TrackMatcher
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
+import com.sen0413.ultimatewidget.hub.PlaylistImporter
+import com.sen0413.ultimatewidget.data.ImportLinks
 import com.sen0413.ultimatewidget.hub.YouTubeEmbed
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.TextRole
@@ -140,6 +142,10 @@ class PlaylistsScreen(host: Host) : Screen(host) {
         add(missingText)
         add(missingButtons, top = dp(8))
     }
+    private val updateButton = context.pill(context.getString(R.string.import_update), filled = false) {
+        openPlaylist?.let { importDialogs.update(it.id) }
+    }.apply { visibility = View.GONE }
+    private val updateInfo = context.label("", TextRole.CAPTION, Ink.MIST).apply { visibility = View.GONE }
     private val detailEmpty = context.label(context.getString(R.string.playlist_detail_empty), TextRole.BODY, Ink.MIST)
     private val entryList = ReorderList(context)
     private val header: LinearLayout = context.column {
@@ -171,8 +177,13 @@ class PlaylistsScreen(host: Host) : Screen(host) {
             }, dp(48), dp(48))
         })
         add(header, top = dp(4))
-        add(context.pill(context.getString(R.string.playlist_add_current), filled = false) { addCurrent() },
-            ViewGroup.LayoutParams.WRAP_CONTENT, top = dp(12))
+        add(context.row {
+            gravity = Gravity.CENTER_VERTICAL
+            add(context.pill(context.getString(R.string.playlist_add_current), filled = false) { addCurrent() },
+                ViewGroup.LayoutParams.WRAP_CONTENT)
+            add(updateButton, ViewGroup.LayoutParams.WRAP_CONTENT, start = dp(10))
+        }, top = dp(12))
+        add(updateInfo, top = dp(6))
         add(missingBanner, top = dp(12))
         add(detailEmpty, top = dp(20))
         add(entryList, top = dp(10))
@@ -493,6 +504,18 @@ class PlaylistsScreen(host: Host) : Screen(host) {
             }
         }
         detailName.text = p.name
+        val link = ImportLinks.get(context, p.id)
+        updateButton.visibility = if (link == null) View.GONE else View.VISIBLE
+        updateInfo.visibility = updateButton.visibility
+        if (link != null) {
+            val from = context.getString(
+                if (link.source == PlaylistImporter.Source.SPOTIFY.name) R.string.import_from_spotify_short else R.string.import_from_youtube_short,
+            )
+            val ago = android.text.format.DateUtils.getRelativeTimeSpanString(
+                link.lastSyncMs, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS,
+            )
+            updateInfo.text = context.getString(R.string.import_last_updated, from, ago)
+        }
         detailDescription.text = p.description
         detailDescription.visibility = if (p.description.isBlank()) View.GONE else View.VISIBLE
         detailMeta.text = metaText(p)
@@ -684,6 +707,7 @@ class PlaylistsScreen(host: Host) : Screen(host) {
                 .setTitle(context.getString(R.string.playlist_delete_title, p.name))
                 .setPositiveButton(R.string.playlist_delete_confirm) { _, _ ->
                     if (openId == p.id) open(null)
+                    ImportLinks.remove(context, p.id)
                     HubController.scope.launch { store.delete(p.id) }
                 }
                 .setNegativeButton(R.string.playlist_cancel, null)

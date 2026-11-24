@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.sen0413.ultimatewidget.data.ArtStore
 import com.sen0413.ultimatewidget.data.EntryDraft
+import com.sen0413.ultimatewidget.data.ImportLinks
+import com.sen0413.ultimatewidget.data.TrackMatcher
 import com.sen0413.ultimatewidget.data.PlaylistMeta
 import com.sen0413.ultimatewidget.data.PlaylistStore
 import kotlinx.coroutines.Dispatchers
@@ -271,13 +273,16 @@ object PlaylistImporter {
 
     /**
      * Stores [fetched] as a new hub playlist (songs played by [source]'s app), with its cover
-     * and the songs' covers. Returns (playlist id, songs added).
+     * and the songs' covers, and remembers where it came from so it can be updated later.
+     * Returns (playlist id, songs added).
      */
-    suspend fun save(context: Context, store: PlaylistStore, source: Source, fetched: Fetched): Pair<Long, Int> {
-        val pkg = if (source == Source.SPOTIFY) KnownApps.SPOTIFY else KnownApps.YOUTUBE_MUSIC
-        val label = ExternalSnapshots.appLabel(context, pkg)
-        val drafts = fetched.songs.map { EntryDraft(pkg, label, it.title, it.artist, null, it.durationMs, it.mediaId) }
+    suspend fun save(context: Context, store: PlaylistStore, source: Source, remoteId: String, fetched: Fetched): Pair<Long, Int> {
+        val drafts = drafts(context, source, fetched.songs)
         val id = store.createWithEntries(fetched.name, fetched.description, drafts)
+        ImportLinks.put(
+            context, id,
+            ImportLinks.Link(source.name, remoteId, System.currentTimeMillis(), drafts.map { TrackMatcher.key(it.title, it.artist) }.toSet()),
+        )
         fetched.imageUrl?.let { url ->
             download(url)?.let { bitmap ->
                 val jpeg = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }.toByteArray()
@@ -285,14 +290,115 @@ object PlaylistImporter {
                 store.byId(id)?.let { store.updateMeta(id, it.meta.copy(coverPath = path)) }
             }
         }
-        // Song covers, so the playlist looks complete before anything is played.
-        for (song in fetched.songs.take(300)) {
+        saveSongCovers(context, fetched.songs)
+        return id to drafts.size
+    }
+
+    private fun drafts(context: Context, source: Source, songs: List<Song>): List<EntryDraft> {
+        val pkg = packageOf(source)
+        val label = ExternalSnapshots.appLabel(context, pkg)
+        return songs.map { EntryDraft(pkg, label, it.title, it.artist, null, it.durationMs, it.mediaId) }
+    }
+
+    private fun packageOf(source: Source) = if (source == Source.SPOTIFY) KnownApps.SPOTIFY else KnownApps.YOUTUBE_MUSIC
+
+    /** Song covers, so the playlist looks complete before anything is played. */
+    private suspend fun saveSongCovers(context: Context, songs: List<Song>) {
+        for (song in songs.take(300)) {
             val url = song.imageUrl ?: continue
             if (ArtStore.has(context, song.title, song.artist)) continue
             val bitmap = download(url) ?: continue
             ArtStore.save(context, song.title, song.artist, square(bitmap))
         }
-        return id to drafts.size
+    }
+
+    // ---------------------------------------------------------------- updating
+
+    data class SyncResult(val name: String, val added: Int, val removed: Int)
+
+    fun sourceOf(context: Context, playlistId: Long): Source? =
+        ImportLinks.get(context, playlistId)?.let { link -> Source.values().firstOrNull { it.name == link.source } }
+
+    /**
+     * Brings an imported playlist up to date with its platform:
+     *  - songs added there are added here (with covers), in the platform's order;
+     *  - songs removed there are removed here;
+     *  - songs the user added here by hand stay, after the platform's songs;
+     *  - songs from the platform that the user removed here are not brought back.
+     * Throws [NeedsSpotifyApproval] / [NeedsYouTubeSignIn] like the import does.
+     */
+    suspend fun sync(context: Context, store: PlaylistStore, playlistId: Long): SyncResult {
+        val link = ImportLinks.get(context, playlistId) ?: throw IllegalStateException("not imported")
+        val source = Source.values().first { it.name == link.source }
+        val playlist = store.byId(playlistId) ?: throw IllegalStateException("gone")
+        val fetched = if (source == Source.SPOTIFY) spotifyPlaylist(context, link.remoteId) else youTubePlaylist(context, link.remoteId)
+
+        val key = { title: String, artist: String -> TrackMatcher.key(title, artist) }
+        val current = playlist.entries
+        val currentKeys = current.map { key(it.title, it.artist) }.toSet()
+        // Songs from the platform that are no longer here: the user removed them.
+        // (A song the user put back by hand is here again, so it is not "removed".)
+        val userRemoved = (link.removedKeys + link.importedKeys) - currentKeys
+        val sourceSongs = fetched.songs.distinctBy { key(it.title, it.artist) }
+        val sourceKeys = sourceSongs.map { key(it.title, it.artist) }.toSet()
+        val byKey = current.associateBy { key(it.title, it.artist) }
+
+        val wanted = sourceSongs.filter { key(it.title, it.artist) !in userRemoved }
+        val mediaIds = HashMap<Long, String>()
+        val newSongs = ArrayList<Song>()
+        for (song in wanted) {
+            val existing = byKey[key(song.title, song.artist)]
+            if (existing == null) {
+                newSongs += song
+            } else if (existing.mediaId.isNullOrBlank() && !song.mediaId.isNullOrBlank()) {
+                mediaIds[existing.id] = song.mediaId
+            }
+        }
+        val newDrafts = drafts(context, source, newSongs)
+        // The platform's order, each new song where it stands there.
+        val order = ArrayList<Any>()
+        var draftIndex = 0
+        for (song in wanted) {
+            val existing = byKey[key(song.title, song.artist)]
+            if (existing != null) order += existing.id else order += newDrafts[draftIndex++]
+        }
+        // The user's own additions (not from the platform) stay, after the platform's songs.
+        val removedFromSource = current.filter { val k = key(it.title, it.artist); k in link.importedKeys && k !in sourceKeys }
+        for (e in current) {
+            val k = key(e.title, e.artist)
+            if (k !in link.importedKeys && k !in sourceKeys) order += e.id
+        }
+        store.syncEntries(playlistId, order, mediaIds)
+        ImportLinks.put(
+            context, playlistId,
+            link.copy(lastSyncMs = System.currentTimeMillis(), importedKeys = sourceKeys, removedKeys = userRemoved intersect sourceKeys),
+        )
+        saveSongCovers(context, newSongs)
+        return SyncResult(playlist.name, newDrafts.size, removedFromSource.size)
+    }
+
+    /** Updates every imported playlist; returns the results of those that worked. */
+    suspend fun syncAll(context: Context, store: PlaylistStore): List<SyncResult> {
+        val out = ArrayList<SyncResult>()
+        for (id in ImportLinks.linkedIds(context)) {
+            if (store.byId(id) == null) {
+                ImportLinks.remove(context, id)
+                continue
+            }
+            runCatching { sync(context, store, id) }.onSuccess { out += it }
+                .onFailure { Log.i(TAG, "update of playlist $id failed: ${it.javaClass.simpleName}") }
+        }
+        return out
+    }
+
+    /** Once a day, when turned on in Settings: updates imported playlists quietly in the background. */
+    suspend fun autoSync(context: Context, store: PlaylistStore) {
+        if (!ImportLinks.isAutoUpdate(context)) return
+        val now = System.currentTimeMillis()
+        if (now - ImportLinks.lastAutoUpdate(context) < 24 * 60 * 60 * 1000L) return
+        if (ImportLinks.linkedIds(context).isEmpty()) return
+        ImportLinks.setLastAutoUpdate(context, now)
+        syncAll(context, store)
     }
 
     private suspend fun download(url: String): Bitmap? = SpotifyLink.downloadImage(url)

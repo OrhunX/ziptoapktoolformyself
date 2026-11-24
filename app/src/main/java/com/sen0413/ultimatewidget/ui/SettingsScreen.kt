@@ -23,6 +23,7 @@ import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
 import com.sen0413.ultimatewidget.hub.SpotifyLink
 import com.sen0413.ultimatewidget.hub.YouTubeEmbed
+import com.sen0413.ultimatewidget.data.ImportLinks
 import com.sen0413.ultimatewidget.hub.YouTubeAccount
 import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.Ink
@@ -208,6 +209,23 @@ class SettingsScreen(host: Host) : Screen(host) {
         add(context.row {
             add(ytOn, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
             add(ytOff, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
+        }, top = dp(12))
+
+        add(context.label(context.getString(R.string.auto_update_title), TextRole.HEADING), top = dp(20))
+        add(context.label(context.getString(R.string.auto_update_body), TextRole.CAPTION, Ink.MIST), top = dp(4))
+        val auOn = context.chip(context.getString(R.string.on)) {}
+        val auOff = context.chip(context.getString(R.string.off)) {}
+        fun syncAu() {
+            val enabled = ImportLinks.isAutoUpdate(context)
+            auOn.setChipSelected(enabled)
+            auOff.setChipSelected(!enabled)
+        }
+        auOn.setOnClickListener { ImportLinks.setAutoUpdate(context, true); syncAu() }
+        auOff.setOnClickListener { ImportLinks.setAutoUpdate(context, false); syncAu() }
+        syncAu()
+        add(context.row {
+            add(auOn, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+            add(auOff, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
         }, top = dp(12))
 
         add(context.label(context.getString(R.string.sensitivity_title), TextRole.HEADING), top = dp(20))
