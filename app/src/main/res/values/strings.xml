@@ -125,7 +125,7 @@
     <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v1.8\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
+    <string name="about_body">The Ultimate Music Widget · v1.9\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>
@@ -172,6 +172,11 @@
     <string name="lock_player_title">Full-screen lock-screen player</string>
     <string name="lock_player_body">Shows the big player when you wake the phone while music plays. The ▾ button shrinks it to the small card; tap the card to open it again.</string>
     <string name="on">On</string>
+    <string name="yt_in_app_title">YouTube Music inside the app</string>
+    <string name="yt_in_app_body">Playlist songs from YouTube Music play right here with YouTube\'s embedded player, also in the background: no switching apps. Songs that cannot be embedded still open in YouTube Music. Works best with "Display over other apps" allowed. Off: every song opens in YouTube Music.</string>
+    <string name="source_in_app">%1$s · in app</string>
+    <string name="embed_channel">In-app YouTube playback</string>
+    <string name="embed_playing">Playing YouTube Music in the app</string>
     <string name="off">Off</string>
 
     <!-- v1.1: look and visualizer -->

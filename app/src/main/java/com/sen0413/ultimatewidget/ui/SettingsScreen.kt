@@ -22,6 +22,7 @@ import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
 import com.sen0413.ultimatewidget.hub.SpotifyLink
+import com.sen0413.ultimatewidget.hub.YouTubeEmbed
 import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.chip
@@ -183,6 +184,27 @@ class SettingsScreen(host: Host) : Screen(host) {
         add(context.row {
             add(on, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
             add(off, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
+        }, top = dp(12))
+
+        add(context.label(context.getString(R.string.yt_in_app_title), TextRole.HEADING), top = dp(20))
+        add(context.label(context.getString(R.string.yt_in_app_body), TextRole.CAPTION, Ink.MIST), top = dp(4))
+        val ytOn = context.chip(context.getString(R.string.on)) {}
+        val ytOff = context.chip(context.getString(R.string.off)) {}
+        fun syncYt() {
+            val enabled = YouTubeEmbed.isEnabled(context)
+            ytOn.setChipSelected(enabled)
+            ytOff.setChipSelected(!enabled)
+        }
+        ytOn.setOnClickListener {
+            YouTubeEmbed.setEnabled(context, true)
+            syncYt()
+            if (!Settings.canDrawOverlays(context)) openOverlaySettings()
+        }
+        ytOff.setOnClickListener { YouTubeEmbed.setEnabled(context, false); syncYt() }
+        syncYt()
+        add(context.row {
+            add(ytOn, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+            add(ytOff, ViewGroup.LayoutParams.WRAP_CONTENT, dp(40), start = dp(8))
         }, top = dp(12))
 
         add(context.label(context.getString(R.string.sensitivity_title), TextRole.HEADING), top = dp(20))

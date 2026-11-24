@@ -6,6 +6,14 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 1.9
+
+- **YouTube Music inside the app.** Playlist songs from YouTube Music now play right inside the app with YouTube's official embedded player (IFrame API in an invisible WebView, kept alive by a media foreground service), also with the screen off. No switching to the YouTube Music app, no screen changes; next, previous, seek, repeat and shuffle work exactly like local songs.
+- Songs whose owner disabled embedding (or that fail to start within 15 s) automatically play through the YouTube Music app as before, and are remembered so they go there directly next time.
+- Covers for these songs come from YouTube's thumbnail, cropped to the square album cover, and are stored with the other covers.
+- Settings → "YouTube Music inside the app" turns this on or off.
+- Note: background playback of embedded YouTube is outside YouTube's terms of service; this is a course-project demo only.
+
 ## What's new in 1.8
 
 - **YouTube Music mostly in the background.** The first YouTube Music song of a playlist opens YouTube Music once, with all of the playlist's YouTube Music songs loaded as one temporary playlist (youtube.com `watch_videos` → `list=TL…`). Every later YouTube Music song is a background `skipToQueueItem` inside YouTube Music's own queue; when YouTube Music moves on to exactly the next hub song by itself, the hub keeps it instead of re-asking.

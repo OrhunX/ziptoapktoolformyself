@@ -73,6 +73,8 @@ object HubController {
     private const val MAX_RESTARTS = 3
     private const val RESTART_VERIFY_MS = 1_500L
     private const val MAX_SPOTIFY_LOOKUPS = 150
+    private const val EMBED_NUDGE_MS = 6_000L
+    private const val EMBED_GIVE_UP_MS = 15_000L
 
     val scope: CoroutineScope = MainScope()
 
@@ -87,6 +89,9 @@ object HubController {
     private val handler = Handler(Looper.getMainLooper())
 
     private var local = SourceSnapshot(SourceKind.LOCAL, "Local files", null, null, isPlaying = false)
+    /** A YouTube song playing inside our app (YouTubeEmbed); shown in place of [local]. */
+    private var embedded: SourceSnapshot? = null
+    private var embedArt: android.graphics.Bitmap? = null
     private var external: SourceSnapshot? = null
     private var externalController: PlatformController? = null
     private var active = SourceKind.LOCAL
@@ -149,6 +154,10 @@ object HubController {
         var adoptNext = false
         /** Played through Spotify's SDK (exact song) rather than the shared media session. */
         var viaSpotifySdk = false
+        /** Played inside our app with YouTube's embedded player. */
+        var embedded = false
+        var embedStarted = false
+        var embedVideoId: String? = null
         /** We already made sure the requested song started from the beginning. */
         var restartChecked = false
         /** Seeks to the start sent for this song, and when the last one was sent. */
@@ -196,6 +205,8 @@ object HubController {
         }
 
         SpotifyLink.onPlayerState = ::onSpotifyState
+        YouTubeEmbed.onUpdate = ::onEmbedUpdate
+        YouTubeEmbed.onError = ::onEmbedError
         SpotifyLink.onAuthorized = { scope.launch { resolveSpotifyIds() } }
 
         notificationAccess = isListenerEnabled()
@@ -220,6 +231,10 @@ object HubController {
 
     suspend fun playPause() {
         val s = session
+        if (s != null && s.embedded) {
+            if (embedded?.isPlaying == true) YouTubeEmbed.pause() else YouTubeEmbed.play()
+            return
+        }
         if (s != null && !s.entry.isLocal && external?.packageName != s.entry.sourcePackage) {
             playEntry(s.pos) // the app was not running yet: ask it again
             return
@@ -354,6 +369,10 @@ object HubController {
 
     suspend fun seekTo(positionMs: Long) {
         val target = positionMs.coerceAtLeast(0L)
+        if (session?.embedded == true) {
+            YouTubeEmbed.seekTo(target)
+            return
+        }
         when (currentKind()) {
             SourceKind.LOCAL -> localConnection.withController { it.seekTo(target) }
             SourceKind.EXTERNAL -> externalController?.transportControls?.seekTo(target)
@@ -424,6 +443,19 @@ object HubController {
 
     /** The song playing right now, described so it can be stored in a playlist. */
     fun currentDraft(): EntryDraft? {
+        val s = session
+        if (s != null && s.embedded) {
+            val e = s.entry
+            return EntryDraft(
+                sourcePackage = e.sourcePackage,
+                sourceLabel = e.sourceLabel,
+                title = e.title,
+                artist = e.artist,
+                mediaUri = null,
+                durationMs = embedded?.track?.durationMs ?: e.durationMs,
+                mediaId = s.embedVideoId ?: e.mediaId,
+            )
+        }
         val source = _state.value.current
         val track = source.track ?: return null
         if (track.title.isBlank()) return null
@@ -482,8 +514,18 @@ object HubController {
         s.restartAttempts = 0
         s.lastRestartAt = 0L
         s.viaSpotifySdk = false
+        s.embedded = false
+        s.embedStarted = false
+        s.embedVideoId = null
         HubNotifications.cancelContinue(app)
         val entry = s.entry
+        // The previous in-app YouTube song stops at once (it is reused for the next one).
+        if (wantsEmbed(entry)) {
+            YouTubeEmbed.pause()
+            embedded = null
+        } else {
+            stopEmbed()
+        }
 
         if (entry.isLocal) {
             val uri = entry.mediaUri
@@ -521,6 +563,10 @@ object HubController {
                 publish()
                 return
             }
+            if (wantsEmbed(entry)) {
+                playEmbedded(s, entry)
+                return
+            }
             s.viaSpotifySdk = pkg == KnownApps.SPOTIFY && SpotifyLink.isPlayableId(entry.mediaId) &&
                 SpotifyLink.isAuthorized(app) && SpotifyLink.isInstalled(app)
             // Stop everything first, including the same app: the old song must not keep playing
@@ -536,6 +582,152 @@ object HubController {
             scheduleCheck(s.generation, FIRST_CHECK_MS)
             publish()
         }
+    }
+
+    // ---------------------------------------------------------------- YouTube inside the app
+
+    /** YouTube Music / YouTube songs play inside our app unless turned off or known not to embed. */
+    private fun wantsEmbed(entry: PlaylistEntry): Boolean {
+        val pkg = entry.sourcePackage
+        if (pkg != KnownApps.YOUTUBE_MUSIC && pkg != KnownApps.YOUTUBE) return false
+        if (!YouTubeEmbed.isEnabled(app)) return false
+        val id = entry.mediaId
+        return !(YouTubeLink.isVideoId(id) && YouTubeEmbed.isBlocked(app, id!!))
+    }
+
+    /**
+     * Plays a YouTube song with the embedded player: no other app, no screen change. Its
+     * video id is found with the unofficial search when the playlist does not have it yet.
+     * Whatever cannot be played this way goes to the YouTube Music app ([embedFallback]).
+     */
+    private suspend fun playEmbedded(s: ActiveSession, entry: PlaylistEntry) {
+        val generation = s.generation
+        pauseOthers(keepPackage = null, keepLocal = false)
+        sessions.preferredPackage = null
+        active = SourceKind.LOCAL
+        s.embedded = true
+        embedArt = null
+        embedded = embedSnapshot(entry, null, playing = false, positionMs = 0L, durationMs = entry.durationMs)
+        publish()
+
+        var id = entry.mediaId?.takeIf(YouTubeLink::isVideoId)
+        if (id == null) {
+            id = kotlinx.coroutines.withTimeoutOrNull(YT_LOOKUP_MS) { YouTubeLink.findVideoId(entry.title, entry.artist) }
+            if (id != null) rememberYouTubeId(entry, id)
+        }
+        if (session !== s || s.generation != generation) return
+        if (id == null || YouTubeEmbed.isBlocked(app, id)) {
+            embedFallback(s)
+            return
+        }
+        s.embedVideoId = id
+        loadEmbedArt(s, entry, id)
+        YouTubeEmbedService.start(app, entry.title)
+        YouTubeEmbed.load(app, id)
+        // Autoplay can be held back (e.g. an ad, a slow start): nudge once, then give up on embedding.
+        handler.postDelayed({
+            if (session === s && s.generation == generation && s.embedded && !s.embedStarted) YouTubeEmbed.play()
+        }, EMBED_NUDGE_MS)
+        handler.postDelayed({
+            if (session === s && s.generation == generation && s.embedded && !s.embedStarted) {
+                Log.i(TAG, "Embedded player did not start; using the app")
+                scope.launch { if (session === s && s.generation == generation) embedFallback(s) }
+            }
+        }, EMBED_GIVE_UP_MS)
+    }
+
+    /** The song cannot play inside our app: play it in the YouTube Music app (v1.8 method). */
+    private suspend fun embedFallback(s: ActiveSession) {
+        val entry = s.entry
+        val pkg = entry.sourcePackage ?: return missed(s)
+        s.embedded = false
+        s.embedStarted = false
+        stopEmbed()
+        val now = SystemClock.elapsedRealtime()
+        s.startedAt = now
+        s.attempts = 0
+        pauseOthers(keepPackage = null, keepLocal = false)
+        active = SourceKind.EXTERNAL
+        sessions.preferredPackage = pkg
+        s.watch = ExternalTrackWatch(entry.title, now)
+        s.query = listOf(entry.title, entry.artist).filter { it.isNotBlank() }.joinToString(" ")
+        requestExternal(s)
+        scheduleCheck(s.generation, FIRST_CHECK_MS)
+        publish()
+    }
+
+    private fun stopEmbed() {
+        embedded = null
+        embedArt = null
+        if (!YouTubeEmbed.isActive) return
+        YouTubeEmbed.stop()
+        YouTubeEmbedService.stop(app)
+    }
+
+    private fun onEmbedUpdate(state: Int, positionMs: Long, durationMs: Long) {
+        val s = session ?: return
+        if (!s.embedded) return
+        val playing = state == YouTubeEmbed.STATE_PLAYING
+        if (playing && !s.embedStarted) {
+            s.embedStarted = true
+            s.misses = 0
+        }
+        val duration = if (durationMs > 0L) durationMs else s.entry.durationMs
+        embedded = embedSnapshot(s.entry, s.embedVideoId, playing, positionMs, duration)
+        if (state == YouTubeEmbed.STATE_ENDED && s.embedStarted) {
+            s.embedStarted = false
+            embedded = embedSnapshot(s.entry, s.embedVideoId, false, duration, duration)
+            scope.launch { advance(auto = true) }
+        }
+        publish()
+    }
+
+    private fun onEmbedError(code: Int) {
+        val s = session ?: return
+        if (!s.embedded) return
+        val id = s.embedVideoId
+        if (id != null && YouTubeEmbed.isPermanentError(code)) YouTubeEmbed.block(app, id)
+        val generation = s.generation
+        scope.launch { if (session === s && s.generation == generation && s.embedded) embedFallback(s) }
+    }
+
+    private fun embedSnapshot(entry: PlaylistEntry, videoId: String?, playing: Boolean, positionMs: Long, durationMs: Long) =
+        SourceSnapshot(
+            kind = SourceKind.LOCAL,
+            appLabel = app.getString(R.string.source_in_app, entry.sourceLabel),
+            packageName = entry.sourcePackage,
+            track = TrackInfo(
+                title = entry.title,
+                artist = entry.artist,
+                mediaId = videoId,
+                art = embedArt,
+                durationMs = durationMs,
+            ),
+            isPlaying = playing,
+            positionMs = positionMs,
+            positionAtElapsedMs = SystemClock.elapsedRealtime(),
+        )
+
+    /** The song's stored cover, else YouTube's thumbnail (cropped to the square cover), kept for later. */
+    private fun loadEmbedArt(s: ActiveSession, entry: PlaylistEntry, id: String) {
+        val generation = s.generation
+        scope.launch {
+            val art = ArtStore.load(app, entry.title, entry.artist)
+                ?: SpotifyLink.downloadImage("https://i.ytimg.com/vi/$id/hqdefault.jpg")?.let(::squareThumbnail)
+                    ?.also { ArtStore.save(app, entry.title, entry.artist, it) }
+                ?: return@launch
+            if (session !== s || s.generation != generation || !s.embedded) return@launch
+            embedArt = art
+            embedded = embedded?.let { it.copy(track = it.track?.copy(art = art)) }
+            publish()
+        }
+    }
+
+    /** hqdefault is 4:3 with the 16:9 video letterboxed; the square in its middle is the cover. */
+    private fun squareThumbnail(src: android.graphics.Bitmap): android.graphics.Bitmap {
+        val contentHeight = minOf(src.height, src.width * 9 / 16)
+        val side = minOf(contentHeight, src.width)
+        return android.graphics.Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
     }
 
     /**
@@ -979,6 +1171,7 @@ object HubController {
         if (session == null) return
         session = null
         sessionGeneration++
+        stopEmbed()
         sessions.preferredPackage = null
         HubNotifications.cancelContinue(app)
         browserBridge.disconnectAll()
@@ -1260,8 +1453,9 @@ object HubController {
 
     private fun buildState(): HubState {
         val s = session
+        val shownLocal = embedded?.takeIf { s?.embedded == true } ?: local
         val base = HubState(
-            local = local,
+            local = shownLocal,
             external = external,
             active = active,
             visualizer = visualizerStatus,
@@ -1368,7 +1562,8 @@ object HubController {
         }
         VisualizerService.start(app)
         val sessionId = when (cur.kind) {
-            SourceKind.LOCAL -> HubAudio.localSessionId(app)
+            // A YouTube song inside the app plays in a WebView: analyse the output mix.
+            SourceKind.LOCAL -> if (session?.embedded == true) 0 else HubAudio.localSessionId(app)
             // Prefer the session the app announced; fall back to the output mix (session 0).
             SourceKind.EXTERNAL -> AudioSessionRegistry.sessionFor(cur.packageName) ?: 0
         }

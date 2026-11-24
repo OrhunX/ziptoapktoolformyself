@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Spotify / YouTube lookups and the in-app YouTube player -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Our own player: playback notification and media foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -177,6 +180,12 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Keeps a YouTube song playing inside the app (embedded player) alive in the background -->
+        <service
+            android:name=".hub.YouTubeEmbedService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- Keeps real-audio analysis running for the widget while music plays -->
         <service
