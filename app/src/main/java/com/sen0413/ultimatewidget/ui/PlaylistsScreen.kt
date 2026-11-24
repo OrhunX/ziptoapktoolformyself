@@ -23,6 +23,7 @@ import com.sen0413.ultimatewidget.data.TrackMatcher
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
+import com.sen0413.ultimatewidget.hub.YouTubeEmbed
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.TextRole
 import com.sen0413.ultimatewidget.ui.kit.add
@@ -544,9 +545,13 @@ class PlaylistsScreen(host: Host) : Screen(host) {
     private fun installed(pkg: String): Boolean =
         runCatching { context.packageManager.getApplicationInfo(pkg, 0); true }.getOrDefault(false)
 
+    /** YouTube songs also play inside our app (embedded player), with or without the YouTube Music app. */
+    private fun canPlay(pkg: String): Boolean =
+        installed(pkg) || ((pkg == KnownApps.YOUTUBE_MUSIC || pkg == KnownApps.YOUTUBE) && YouTubeEmbed.isEnabled(context))
+
     /** Songs that cannot play here: files from someone else's phone, or apps that are not installed. */
     private fun unplayable(p: Playlist): List<PlaylistEntry> =
-        p.entries.filter { it.isMissing || (it.sourcePackage != null && !installed(it.sourcePackage)) }
+        p.entries.filter { it.isMissing || (it.sourcePackage != null && !canPlay(it.sourcePackage)) }
 
     private fun renderMissing(p: Playlist) {
         val missing = unplayable(p)
@@ -706,7 +711,7 @@ class PlaylistsScreen(host: Host) : Screen(host) {
             visibility = View.GONE
             setColors(Ink.EMBER, Ink.LAVENDER)
         }
-        private val unplayable = entry.isMissing || (entry.sourcePackage != null && !installed(entry.sourcePackage))
+        private val unplayable = entry.isMissing || (entry.sourcePackage != null && !canPlay(entry.sourcePackage))
 
         init {
             orientation = HORIZONTAL

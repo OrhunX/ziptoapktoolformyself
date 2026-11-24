@@ -40,7 +40,9 @@ class PlaylistCover(context: Context) : View(context) {
     private var fill: Int = Ink.VIOLET
     private var job: Job? = null
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** Covers only: always fully opaque (the shapes above use [paint], whose alpha changes). */
+    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val clip = Path()
     private val rect = RectF()
@@ -127,7 +129,7 @@ class PlaylistCover(context: Context) : View(context) {
         val top = (bitmap.height - side) / 2
         src.set(left, top, left + side, top + side)
         dst.set(target)
-        canvas.drawBitmap(bitmap, src, dst, paint)
+        canvas.drawBitmap(bitmap, src, dst, bitmapPaint)
     }
 
     companion object {
