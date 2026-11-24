@@ -6,6 +6,12 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 2.5
+
+- **Liked songs can be imported:** Spotify's "Liked Songs" (needs the `user-library-read` permission, so Spotify asks for approval once more) and YouTube Music's "Liked music" are now at the top of the import lists, and can be updated like any imported playlist.
+- **No more 99-song limit.** Spotify playlists are read page by page to the end, from the 2026 `/items` address and, if that fails, the older `/tracks` one; the public embed page (first 100 songs only) is the last resort and now says so. YouTube Music playlists follow the next-page token in both of YouTube's layouts until the end. The 1,000-song cap is gone (only a 5,000-song safety net remains).
+- An update from a list that could only be read partly adds new songs but removes nothing.
+
 ## What's new in 2.4
 
 - **Update imported playlists.** Playlists imported from Spotify or YouTube Music now remember where they came from. An "Update" button on the playlist (with "From Spotify · updated 2 hours ago"), "Update imported playlists" in the import menu, and an optional daily update in the background (Settings) bring them up to date:

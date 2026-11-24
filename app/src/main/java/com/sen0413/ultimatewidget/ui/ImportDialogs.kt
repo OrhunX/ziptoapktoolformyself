@@ -156,6 +156,7 @@ class ImportDialogs(private val host: Host) {
                 }
                 val (newId, count) = PlaylistImporter.save(context, HubController.playlists, source, id, playlist)
                 host.toast(context.getString(R.string.import_apps_done, playlist.name, count))
+                if (playlist.limited) host.toast(context.getString(R.string.import_limited))
                 lastId = newId
                 done++
             }

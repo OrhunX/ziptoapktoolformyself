@@ -52,8 +52,8 @@ object SpotifyLink {
     private const val KEY_TOKEN_EXPIRY = "token_expiry"
     private const val KEY_LAST_AUTO_AUTH = "last_auto_auth"
     private const val KEY_SCOPES = "scopes"
-    /** 2 = the token may also read the user's playlists (import). */
-    private const val SCOPE_VERSION = 2
+    /** 3 = the token may also read the user's playlists and Liked Songs (import). */
+    private const val SCOPE_VERSION = 3
 
     private val handler = Handler(Looper.getMainLooper())
     private var remote: SpotifyAppRemote? = null
@@ -189,7 +189,7 @@ object SpotifyLink {
     /** Opens Spotify's approval screen (a quick hand-off to the Spotify app once approved). */
     fun authorize(activity: Activity) {
         val request = AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI)
-            .setScopes(arrayOf("app-remote-control", "playlist-read-private", "playlist-read-collaborative"))
+            .setScopes(arrayOf("app-remote-control", "playlist-read-private", "playlist-read-collaborative", "user-library-read"))
             .build()
         prefs(activity).edit().putLong(KEY_LAST_AUTO_AUTH, System.currentTimeMillis()).apply()
         runCatching { AuthorizationClient.openLoginActivity(activity, REQUEST_AUTH, request) }

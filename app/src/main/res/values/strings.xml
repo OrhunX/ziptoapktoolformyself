@@ -125,7 +125,7 @@
     <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v2.4\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
+    <string name="about_body">The Ultimate Music Widget · v2.5\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>
@@ -187,6 +187,7 @@
     <string name="import_apps_done">\"%1$s\" imported: %2$d songs</string>
     <string name="import_failed">That playlist could not be read</string>
     <string name="import_private">This playlist is private: sign in to YouTube Music</string>
+    <string name="import_limited">Spotify only showed the first 100 songs of this playlist: Spotify gives apps the full list only for your own playlists (approve Spotify for those).</string>
     <string name="import_update">Update</string>
     <string name="import_update_all">Update imported playlists</string>
     <string name="import_updating">Updating…</string>

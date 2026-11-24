@@ -32,8 +32,12 @@ import java.net.URL
 object PlaylistImporter {
     private const val TAG = "PlaylistImporter"
     private const val BROWSE_URL = "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false"
-    private const val MAX_SONGS = 1_000
-    private const val MAX_PAGES = 25
+    /** Only a safety net against an endless loop; real playlists stay far below it. */
+    private const val MAX_SONGS = 5_000
+    private const val MAX_PAGES = 200
+    /** The id we use for "Liked Songs" (Spotify) / "Liked music" (YouTube Music, whose real id is LM). */
+    const val SPOTIFY_LIKED = "LIKED"
+    const val YOUTUBE_LIKED = "LM"
 
     enum class Source { SPOTIFY, YOUTUBE_MUSIC }
 
@@ -42,7 +46,8 @@ object PlaylistImporter {
 
     data class Song(val title: String, val artist: String, val durationMs: Long, val mediaId: String?, val imageUrl: String?)
 
-    data class Fetched(val name: String, val description: String, val imageUrl: String?, val songs: List<Song>)
+    /** [limited]: only the first part could be read (Spotify's public page shows at most 100 songs). */
+    data class Fetched(val name: String, val description: String, val imageUrl: String?, val songs: List<Song>, val limited: Boolean = false)
 
     /** Spotify said the playlist exists but did not give its songs (or no approval yet). */
     class NeedsSpotifyApproval : Exception()
@@ -72,6 +77,10 @@ object PlaylistImporter {
     suspend fun spotifyMine(context: Context): List<Remote> = withContext(Dispatchers.IO) {
         val token = SpotifyLink.playlistToken(context) ?: throw NeedsSpotifyApproval()
         val out = ArrayList<Remote>()
+        // "Liked Songs" is not a playlist in Spotify's API: it is the user's library.
+        spotifyGet(token, "https://api.spotify.com/v1/me/tracks?limit=1")?.let { liked ->
+            out += Remote(Source.SPOTIFY, SPOTIFY_LIKED, "Liked Songs", liked.optInt("total"), null)
+        }
         var url: String? = "https://api.spotify.com/v1/me/playlists?limit=50"
         var pages = 0
         while (url != null && pages++ < 6) {
@@ -90,28 +99,17 @@ object PlaylistImporter {
 
     suspend fun spotifyPlaylist(context: Context, id: String): Fetched = withContext(Dispatchers.IO) {
         val token = SpotifyLink.playlistToken(context)
+        if (id == SPOTIFY_LIKED) {
+            if (token == null) throw NeedsSpotifyApproval()
+            val songs = spotifyPages(token, "https://api.spotify.com/v1/me/tracks?limit=50") ?: throw NeedsSpotifyApproval()
+            return@withContext Fetched("Liked Songs", "", null, songs)
+        }
         if (token != null) {
             val meta = spotifyGet(token, "https://api.spotify.com/v1/playlists/$id?fields=name,description,images")
-            val songs = ArrayList<Song>()
-            var url: String? = "https://api.spotify.com/v1/playlists/$id/items?limit=50"
-            var pages = 0
-            while (url != null && pages++ < MAX_PAGES && songs.size < MAX_SONGS) {
-                val json = spotifyGet(token, url) ?: break
-                val items = json.optJSONArray("items") ?: break
-                for (i in 0 until items.length()) {
-                    val row = items.optJSONObject(i) ?: continue
-                    val t = row.optJSONObject("item") ?: row.optJSONObject("track") ?: continue
-                    if (t.optString("type", "track") != "track") continue
-                    val title = t.optString("name").ifBlank { null } ?: continue
-                    val artists = t.optJSONArray("artists")
-                    val artist = (0 until (artists?.length() ?: 0)).mapNotNull { artists?.optJSONObject(it)?.optString("name")?.ifBlank { null } }
-                        .joinToString(", ")
-                    val uri = t.optString("uri").takeIf { it.startsWith("spotify:track:") }
-                    songs += Song(title, artist, t.optLong("duration_ms"), uri, firstImage(t.optJSONObject("album")?.optJSONArray("images")))
-                }
-                url = json.optString("next").takeIf { it.startsWith("https://") }
-            }
-            if (songs.isNotEmpty()) {
+            // The 2026 address first, then the older one, each read page by page to the end.
+            val songs = spotifyPages(token, "https://api.spotify.com/v1/playlists/$id/items?limit=50")?.takeIf { it.isNotEmpty() }
+                ?: spotifyPages(token, "https://api.spotify.com/v1/playlists/$id/tracks?limit=100")
+            if (!songs.isNullOrEmpty()) {
                 return@withContext Fetched(
                     meta?.optString("name").orEmpty().ifBlank { "Spotify playlist" },
                     meta?.optString("description").orEmpty().let(::stripHtml),
@@ -120,8 +118,34 @@ object PlaylistImporter {
                 )
             }
         }
-        // Someone else's playlist (or not approved yet): Spotify's public embed page lists its songs.
-        spotifyEmbed(id) ?: throw NeedsSpotifyApproval()
+        // Someone else's playlist (or not approved yet): Spotify's public embed page lists its
+        // songs, but only the first 100.
+        spotifyEmbed(id)?.let { it.copy(limited = it.songs.size >= 99) } ?: throw NeedsSpotifyApproval()
+    }
+
+    /** Every song of a paged Spotify list (playlist items or saved tracks); null when the first page fails. */
+    private fun spotifyPages(token: String, firstUrl: String): List<Song>? {
+        val songs = ArrayList<Song>()
+        var url: String? = firstUrl
+        var pages = 0
+        while (url != null && pages < MAX_PAGES && songs.size < MAX_SONGS) {
+            val json = spotifyGet(token, url) ?: return if (pages == 0) null else songs
+            pages++
+            val items = json.optJSONArray("items") ?: return if (pages == 1) null else songs
+            for (i in 0 until items.length()) {
+                val row = items.optJSONObject(i) ?: continue
+                val t = row.optJSONObject("item") ?: row.optJSONObject("track") ?: continue
+                if (t.optString("type", "track") != "track") continue
+                val title = t.optString("name").ifBlank { null } ?: continue
+                val artists = t.optJSONArray("artists")
+                val artist = (0 until (artists?.length() ?: 0)).mapNotNull { artists?.optJSONObject(it)?.optString("name")?.ifBlank { null } }
+                    .joinToString(", ")
+                val uri = t.optString("uri").takeIf { it.startsWith("spotify:track:") }
+                songs += Song(title, artist, t.optLong("duration_ms"), uri, firstImage(t.optJSONObject("album")?.optJSONArray("images")))
+            }
+            url = json.optString("next").takeIf { it.startsWith("https://") }
+        }
+        return songs
     }
 
     private fun spotifyEmbed(id: String): Fetched? {
@@ -175,6 +199,8 @@ object PlaylistImporter {
             val title = runsText(item.optJSONObject("title")).ifBlank { return@collect }
             out += Remote(Source.YOUTUBE_MUSIC, browseId.removePrefix("VL"), title, 0, lastThumbnail(item))
         }
+        // "Liked music" is always there for a signed-in user, even when the list leaves it out.
+        if (out.none { it.id == YOUTUBE_LIKED }) out.add(0, Remote(Source.YOUTUBE_MUSIC, YOUTUBE_LIKED, "Liked music", 0, null))
         out.distinctBy { it.id }
     }
 
@@ -186,14 +212,19 @@ object PlaylistImporter {
             ?: first?.let { findObjectWith(it, "musicShelfRenderer")?.optJSONObject("musicShelfRenderer") }
         val songs = LinkedHashMap<String, Song>()
         if (shelf != null) addRows(shelf, songs)
-        var token = shelf?.let(::continuationToken)
+        // The next page's token sits inside the song list (both layouts); never the page's
+        // other shelves, whose tokens would load suggestions.
+        var next = shelf?.let(::continuation)
+        val seen = HashSet<String>()
         var pages = 0
-        while (token != null && pages++ < MAX_PAGES && songs.size < MAX_SONGS) {
-            val next = browse(JSONObject().put("continuation", token), headers) ?: break
-            val before = songs.size
-            addRows(next, songs)
-            if (songs.size == before) break
-            token = continuationToken(next)
+        while (next != null && seen.add(next.token) && pages++ < MAX_PAGES && songs.size < MAX_SONGS) {
+            val page = if (next.newStyle) {
+                browse(JSONObject().put("continuation", next.token), headers)
+            } else {
+                browse(JSONObject(), headers, "&ctoken=${next.token}&continuation=${next.token}&type=next")
+            } ?: break
+            addRows(page, songs)
+            next = continuation(page)
         }
         if (songs.isEmpty()) {
             if (headers.isEmpty()) throw NeedsYouTubeSignIn()
@@ -229,11 +260,18 @@ object PlaylistImporter {
         }
     }
 
-    private fun continuationToken(node: Any): String? =
-        findObjectWith(node, "continuationCommand")?.optJSONObject("continuationCommand")?.optString("token")?.ifBlank { null }
-            ?: findObjectWith(node, "nextContinuationData")?.optJSONObject("nextContinuationData")?.optString("continuation")?.ifBlank { null }
+    /** A next-page token; [newStyle] = sent in the body, else (older layout) in the address. */
+    private class Next(val token: String, val newStyle: Boolean)
 
-    private fun browse(extra: JSONObject, headers: Map<String, String>): JSONObject? {
+    private fun continuation(node: Any): Next? {
+        findObjectWith(node, "continuationCommand")?.optJSONObject("continuationCommand")?.optString("token")?.ifBlank { null }
+            ?.let { return Next(it, newStyle = true) }
+        findObjectWith(node, "nextContinuationData")?.optJSONObject("nextContinuationData")?.optString("continuation")?.ifBlank { null }
+            ?.let { return Next(java.net.URLEncoder.encode(it, "UTF-8"), newStyle = false) }
+        return null
+    }
+
+    private fun browse(extra: JSONObject, headers: Map<String, String>, query: String = ""): JSONObject? {
         val body = JSONObject().put("context", JSONObject().put("client", JSONObject()
             .put("clientName", "WEB_REMIX")
             .put("clientVersion", YouTubeLink.CLIENT_VERSION)
@@ -243,7 +281,7 @@ object PlaylistImporter {
             val k = keys.next()
             body.put(k, extra.get(k))
         }
-        val conn = URL(BROWSE_URL).openConnection() as HttpURLConnection
+        val conn = URL(BROWSE_URL + query).openConnection() as HttpURLConnection
         return try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 10_000
@@ -363,15 +401,22 @@ object PlaylistImporter {
             if (existing != null) order += existing.id else order += newDrafts[draftIndex++]
         }
         // The user's own additions (not from the platform) stay, after the platform's songs.
-        val removedFromSource = current.filter { val k = key(it.title, it.artist); k in link.importedKeys && k !in sourceKeys }
+        // Only part of the list could be read (Spotify's public page stops at 100): add what is
+        // new, but remove nothing, since a missing song may just be past what we could read.
+        val partial = fetched.limited
+        val removedFromSource = if (partial) emptyList() else current.filter { val k = key(it.title, it.artist); k in link.importedKeys && k !in sourceKeys }
         for (e in current) {
             val k = key(e.title, e.artist)
-            if (k !in link.importedKeys && k !in sourceKeys) order += e.id
+            if (k !in sourceKeys && (partial || k !in link.importedKeys)) order += e.id
         }
         store.syncEntries(playlistId, order, mediaIds)
         ImportLinks.put(
             context, playlistId,
-            link.copy(lastSyncMs = System.currentTimeMillis(), importedKeys = sourceKeys, removedKeys = userRemoved intersect sourceKeys),
+            link.copy(
+                lastSyncMs = System.currentTimeMillis(),
+                importedKeys = if (partial) link.importedKeys + sourceKeys else sourceKeys,
+                removedKeys = if (partial) userRemoved else userRemoved intersect sourceKeys,
+            ),
         )
         saveSongCovers(context, newSongs)
         return SyncResult(playlist.name, newDrafts.size, removedFromSource.size)
