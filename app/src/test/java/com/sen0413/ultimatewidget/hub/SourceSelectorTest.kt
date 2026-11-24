@@ -40,9 +40,33 @@ class ExternalTrackWatchTest {
     @Test
     fun armsOnTheRequestedSongThenDetectsTheNextOne() {
         val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
-        assertEquals(playing, watch.onMetadata("Blue Hours (Remastered)", isPlaying = true, nowMs = 1_000))
-        assertEquals(playing, watch.onMetadata("Blue Hours (Remastered)", isPlaying = false, nowMs = 60_000))
-        assertEquals(movedOn, watch.onMetadata("Something Else", isPlaying = true, nowMs = 200_000))
+        assertEquals(playing, watch.onMetadata("Blue Hours (Remastered)", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        // Played through to the end, then the app went on to its next song.
+        assertEquals(movedOn, watch.onMetadata("Something Else", isPlaying = true, nowMs = 201_500))
+    }
+
+    @Test
+    fun aTitleChangeWhilePausedNeverStartsTheNextSong() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = false, nowMs = 30_000, positionMs = 29_000, durationMs = 200_000))
+        // Minutes later the paused app refreshes its session with another title.
+        assertEquals(playing, watch.onMetadata("Something Else", isPlaying = false, nowMs = 330_000))
+    }
+
+    @Test
+    fun anotherSongBeforeOursEndedIsTheUsersChoice() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000, positionMs = 0, durationMs = 200_000))
+        assertEquals(ExternalTrackWatch.Result.USER_CHANGED, watch.onMetadata("Picked In Spotify", isPlaying = true, nowMs = 60_000))
+    }
+
+    @Test
+    fun anotherSongAfterAPauseIsTheUsersChoice() {
+        val watch = ExternalTrackWatch("Blue Hours", startedAtMs = 0)
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = true, nowMs = 1_000))
+        assertEquals(playing, watch.onMetadata("Blue Hours", isPlaying = false, nowMs = 60_000))
+        assertEquals(ExternalTrackWatch.Result.USER_CHANGED, watch.onMetadata("Something Else", isPlaying = true, nowMs = 200_000))
     }
 
     @Test

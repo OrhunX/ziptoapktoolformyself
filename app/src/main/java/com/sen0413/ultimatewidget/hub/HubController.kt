@@ -75,6 +75,8 @@ object HubController {
     private const val RESTART_VERIFY_MS = 1_500L
     private const val MAX_SPOTIFY_LOOKUPS = 150
     private const val EMBED_NUDGE_MS = 6_000L
+    /** A hub playlist paused this long stops acting on its own until the user presses something. */
+    private const val DORMANT_AFTER_MS = 10 * 60_000L
     private const val EMBED_GIVE_UP_MS = 15_000L
 
     val scope: CoroutineScope = MainScope()
@@ -167,6 +169,8 @@ object HubController {
         var embedVideoId: String? = null
         /** A single song resumed from another app: the session ends with it. */
         var oneShot = false
+        /** Paused for a long time: nothing happens automatically until the user acts. */
+        var dormant = false
         /** We already made sure the requested song started from the beginning. */
         var restartChecked = false
         /** Seeks to the start sent for this song, and when the last one was sent. */
@@ -243,6 +247,7 @@ object HubController {
     suspend fun playPause() {
         if (resumeLast(0)) return
         val s = session
+        if (s != null && s.dormant && wake(s)) return
         if (s != null && s.embedded) {
             if (embedded?.isPlaying == true) YouTubeEmbed.pause() else YouTubeEmbed.play()
             return
@@ -278,6 +283,7 @@ object HubController {
 
     suspend fun next() {
         if (resumeLast(1)) return
+        session?.dormant = false
         if (session != null) {
             advance(auto = false)
             return
@@ -290,6 +296,7 @@ object HubController {
 
     suspend fun previous() {
         if (resumeLast(-1)) return
+        session?.dormant = false
         val s = session
         if (s != null) {
             playEntry(if (s.pos > 0) s.pos - 1 else 0)
@@ -517,6 +524,7 @@ object HubController {
             return
         }
         s.pos = index
+        s.dormant = false
         s.generation = ++sessionGeneration
         s.startedAt = SystemClock.elapsedRealtime()
         s.localStarted = false
@@ -980,7 +988,7 @@ object HubController {
     /** Makes sure the requested song really plays: nudges, retries, and skips on a miss. */
     private suspend fun checkExternal(generation: Int) {
         val s = session ?: return
-        if (s.generation != generation || s.entry.isLocal) return
+        if (s.generation != generation || s.entry.isLocal || s.dormant) return
         val watch = s.watch ?: return
         val pkg = s.entry.sourcePackage ?: return
         val controller = sessions.controllerFor(pkg)
@@ -1285,6 +1293,50 @@ object HubController {
         }
     }
 
+    // ---------------------------------------------------------------- long pauses
+
+    private var pausedSince = 0L
+    private val goDormant = Runnable {
+        val s = session ?: return@Runnable
+        if (pausedSince > 0L && SystemClock.elapsedRealtime() - pausedSince >= DORMANT_AFTER_MS && !_state.value.current.isPlaying) {
+            s.dormant = true
+            s.watch = null
+            Log.i(TAG, "Hub playlist paused for a long time: waiting for the user")
+        }
+    }
+
+    /** Notes when a hub playlist was paused; after [DORMANT_AFTER_MS] it stops acting on its own. */
+    private fun trackPause(state: HubState) {
+        val s = session
+        if (s == null || state.current.isPlaying) {
+            if (pausedSince != 0L) handler.removeCallbacks(goDormant)
+            pausedSince = 0L
+            return
+        }
+        if (pausedSince == 0L) {
+            pausedSince = SystemClock.elapsedRealtime()
+            handler.removeCallbacks(goDormant)
+            handler.postDelayed(goDormant, DORMANT_AFTER_MS)
+        }
+    }
+
+    /**
+     * Play after a long pause: continue the same song where it was when the app still has it
+     * loaded; otherwise ask for the playlist's song again.
+     */
+    private suspend fun wake(s: ActiveSession): Boolean {
+        s.dormant = false
+        if (s.entry.isLocal || s.embedded) return false // our own players resume as usual
+        val title = external?.track?.title
+        if (external?.packageName == s.entry.sourcePackage && !title.isNullOrBlank() && TrackMatcher.sameTitle(s.entry.title, title)) {
+            s.watch = ExternalTrackWatch(s.entry.title, SystemClock.elapsedRealtime())
+            s.restartChecked = true // keep its position
+            return false // the normal toggle below presses play in that app
+        }
+        playEntry(s.pos)
+        return true
+    }
+
     // ---------------------------------------------------------------- the last song, across restarts
 
     /** Shows the song from before the app was closed (until something else plays). */
@@ -1549,7 +1601,7 @@ object HubController {
         // Hub playlist: has the external app finished the song we asked for?
         val s = session
         val watch = s?.watch
-        if (s != null && watch != null && snapshot != null && snapshot.packageName == s.entry.sourcePackage) {
+        if (s != null && !s.dormant && watch != null && snapshot != null && snapshot.packageName == s.entry.sourcePackage) {
             val now = SystemClock.elapsedRealtime()
             val wasArmed = watch.isArmed
             val result = watch.onMetadata(
@@ -1578,6 +1630,13 @@ object HubController {
                 ) {
                     rememberYouTubeId(s.entry, playingId!!)
                 }
+            }
+            if (result == ExternalTrackWatch.Result.USER_CHANGED) {
+                // The user picked another song in that app: the hub playlist is over, hands off.
+                endSession()
+                autoSelectSource()
+                publish()
+                return
             }
             if (result == ExternalTrackWatch.Result.MOVED_ON) {
                 s.watch = null
@@ -1689,6 +1748,7 @@ object HubController {
         if (!::app.isInitialized) return
         scheduleArtCapture(s)
         saveLast(s)
+        trackPause(s)
 
         val cur = s.current
         val renderKey = listOf(

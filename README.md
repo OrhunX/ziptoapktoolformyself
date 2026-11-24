@@ -6,6 +6,12 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 2.2
+
+- **No more songs starting on their own.** A Spotify / YouTube Music song now counts as finished only when it really reached its end (its last known position, extrapolated while playing, is within 10 s of its length) or the app stopped on its last seconds. A title change while paused (apps refresh their session on their own) is ignored, so the next song can no longer start by itself on a phone lying on the table.
+- Another song picked inside Spotify / YouTube Music before ours ended is the user's choice: the hub playlist ends and the hub no longer pauses it to play the playlist's next song.
+- A hub playlist paused for 10 minutes stops acting on its own; Play continues the same song where it was (or asks the app for it again), and the widget keeps showing it.
+
 ## What's new in 2.1
 
 - **Covers and versions stay apart.** Finding a YouTube Music song's video now requires the artist (or the version named in the title, e.g. "Kasane Teto cover") to match, not only the title, and also searches videos, where covers and fan uploads usually are. Before, a cover could play the original song.
