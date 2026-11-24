@@ -225,6 +225,7 @@ object HubController {
         scope.launch {
             playlists.load()
             library.refresh()
+            forgetGuessedYouTubeIds()
         }
         // Favorites changed -> the heart on every surface follows.
         // Songs reordered or removed while the playlist plays: the session follows the new list.
@@ -912,6 +913,35 @@ object HubController {
             .plus(entry.id)
             .distinct()
         scope.launch { playlists.setMediaIds(ids.associateWith { id }) }
+    }
+
+    /**
+     * Before 2.1 the lookup matched titles only, so a cover (e.g. a Kasane Teto version) could
+     * be saved with the original's video id. Once, every stored YouTube id is checked against
+     * YouTube (title and channel); ids of another version are dropped and looked up again with
+     * the artist taken into account. Exact ids (imported playlists) pass the check and stay.
+     */
+    private suspend fun forgetGuessedYouTubeIds() {
+        val prefs = app.getSharedPreferences("hub", Context.MODE_PRIVATE)
+        if (prefs.getInt("yt_ids_version", 0) >= 2) return
+        val songs = playlists.playlists.value.flatMap { it.entries }.filter {
+            (it.sourcePackage == KnownApps.YOUTUBE_MUSIC || it.sourcePackage == KnownApps.YOUTUBE) && YouTubeLink.isVideoId(it.mediaId)
+        }
+        val wrong = ArrayList<Long>()
+        var unknown = 0
+        for ((_, group) in songs.groupBy { it.mediaId + "|" + TrackMatcher.key(it.title, it.artist) }.entries.take(400)) {
+            val e = group.first()
+            when (YouTubeLink.videoMatches(e.mediaId!!, e.title, e.artist)) {
+                false -> wrong += group.map { it.id }
+                null -> unknown++
+                true -> Unit
+            }
+        }
+        playlists.clearMediaIds(wrong)
+        // Offline: try again next time (but give up after a few launches).
+        val tries = prefs.getInt("yt_ids_tries", 0) + 1
+        if (unknown == 0 || tries >= 3) prefs.edit().putInt("yt_ids_version", 2).apply()
+        else prefs.edit().putInt("yt_ids_tries", tries).apply()
     }
 
     /** Looks up missing YouTube video ids for a playlist in the background, so it starts faster. */

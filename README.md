@@ -6,6 +6,12 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 2.1
+
+- **Covers and versions stay apart.** Finding a YouTube Music song's video now requires the artist (or the version named in the title, e.g. "Kasane Teto cover") to match, not only the title, and also searches videos, where covers and fan uploads usually are. Before, a cover could play the original song.
+- Video ids saved by earlier versions are checked once against YouTube (title and channel); ids of another version are dropped and looked up again. Exact ids, such as those of imported playlists, are kept.
+- Playlist covers are no longer drawn faded, and YouTube songs are no longer greyed out when they can play inside the app.
+
 ## What's new in 2.0
 
 - **The widget remembers the last song.** Its title, artist, cover, position and the hub playlist it came from are kept on disk, so after the app is closed (or the phone restarts) the widget still shows it instead of going blank.

@@ -208,6 +208,17 @@ class PlaylistStore(context: Context) {
         publish()
     }
 
+    /** Forgets the stored app id of these songs (a wrong guess; looked up again later). */
+    suspend fun clearMediaIds(entryIds: Collection<Long>) = withContext(Dispatchers.IO) {
+        if (entryIds.isEmpty()) return@withContext
+        for (id in entryIds) {
+            helper.writableDatabase.update(
+                T_ENTRIES, ContentValues().apply { putNull("media_id") }, "id = ?", arrayOf(id.toString()),
+            )
+        }
+        publish()
+    }
+
     /** A song that could not be found here will be played by [pkg] from now on. */
     suspend fun assignSource(entryIds: Collection<Long>, pkg: String, label: String) = withContext(Dispatchers.IO) {
         for (id in entryIds) {
