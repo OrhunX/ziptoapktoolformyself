@@ -23,6 +23,7 @@ import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.hub.KnownApps
 import com.sen0413.ultimatewidget.hub.SpotifyLink
 import com.sen0413.ultimatewidget.hub.YouTubeEmbed
+import com.sen0413.ultimatewidget.hub.YouTubeAccount
 import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.Ink
 import com.sen0413.ultimatewidget.ui.kit.chip
@@ -80,6 +81,8 @@ class SettingsScreen(host: Host) : Screen(host) {
             { listenerEnabled }) { host.openNotificationAccess() },
         SetupRow(R.string.setup_spotify, R.string.setup_spotify_body, R.string.connect,
             { SpotifyLink.isAuthorized(context) }) { host.connectSpotify() },
+        SetupRow(R.string.setup_youtube, R.string.setup_youtube_body, R.string.sign_in,
+            { YouTubeAccount.isSignedIn(context) }) { host.signInYouTube() },
         SetupRow(R.string.setup_media, R.string.setup_media_body, R.string.grant,
             { HubController.library.hasPermission() }) { host.requestMediaAccess() },
         SetupRow(R.string.setup_notifications, R.string.setup_notifications_body, R.string.grant,

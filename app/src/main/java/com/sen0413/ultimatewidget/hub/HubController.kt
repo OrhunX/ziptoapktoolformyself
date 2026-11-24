@@ -30,6 +30,7 @@ import com.sen0413.ultimatewidget.data.Playlist
 import com.sen0413.ultimatewidget.data.PlaylistEntry
 import com.sen0413.ultimatewidget.data.PlaylistStore
 import com.sen0413.ultimatewidget.data.RepeatMode
+import com.sen0413.ultimatewidget.data.ResumeStore
 import com.sen0413.ultimatewidget.data.TrackMatcher
 import com.sen0413.ultimatewidget.playback.MediaItems
 import com.sen0413.ultimatewidget.ui.LockPlayerActivity
@@ -92,6 +93,12 @@ object HubController {
     /** A YouTube song playing inside our app (YouTubeEmbed); shown in place of [local]. */
     private var embedded: SourceSnapshot? = null
     private var embedArt: android.graphics.Bitmap? = null
+    /** The last song from before the app was closed, shown until something plays (ResumeStore). */
+    private var restored: SourceSnapshot? = null
+    private var restoredLast: ResumeStore.Last? = null
+    private var lastSavedKey: Any? = null
+    /** Where the next local song of a playlist starts (resuming a song that was half played). */
+    private var pendingLocalStartMs = 0L
     private var external: SourceSnapshot? = null
     private var externalController: PlatformController? = null
     private var active = SourceKind.LOCAL
@@ -158,6 +165,8 @@ object HubController {
         var embedded = false
         var embedStarted = false
         var embedVideoId: String? = null
+        /** A single song resumed from another app: the session ends with it. */
+        var oneShot = false
         /** We already made sure the requested song started from the beginning. */
         var restartChecked = false
         /** Seeks to the start sent for this song, and when the last one was sent. */
@@ -187,6 +196,7 @@ object HubController {
         browserBridge = BrowserBridge(app)
         loadModes()
         local = initialLocalSnapshot()
+        restoreLast()
         screenOn = app.getSystemService(PowerManager::class.java).isInteractive
 
         AudioSessionRegistry.register(app)
@@ -230,6 +240,7 @@ object HubController {
     // ---------------------------------------------------------------- transport commands
 
     suspend fun playPause() {
+        if (resumeLast(0)) return
         val s = session
         if (s != null && s.embedded) {
             if (embedded?.isPlaying == true) YouTubeEmbed.pause() else YouTubeEmbed.play()
@@ -265,6 +276,7 @@ object HubController {
     }
 
     suspend fun next() {
+        if (resumeLast(1)) return
         if (session != null) {
             advance(auto = false)
             return
@@ -276,6 +288,7 @@ object HubController {
     }
 
     suspend fun previous() {
+        if (resumeLast(-1)) return
         val s = session
         if (s != null) {
             playEntry(if (s.pos > 0) s.pos - 1 else 0)
@@ -390,14 +403,15 @@ object HubController {
     // ---------------------------------------------------------------- library and playlists
 
     /** Plays [tracks] in our own player, starting at [index]. */
-    suspend fun playLibrary(tracks: List<LocalTrack>, index: Int) {
+    suspend fun playLibrary(tracks: List<LocalTrack>, index: Int, startMs: Long = 0L) {
         if (tracks.isEmpty()) return
+        restored = null
         endSession()
         pauseOthers(keepPackage = null, keepLocal = true)
         active = SourceKind.LOCAL
         publish()
         localConnection.withController { c ->
-            c.setMediaItems(tracks.map(MediaItems::from), index.coerceIn(0, tracks.lastIndex), 0L)
+            c.setMediaItems(tracks.map(MediaItems::from), index.coerceIn(0, tracks.lastIndex), startMs)
             c.repeatMode = playerRepeatMode()
             c.shuffleModeEnabled = shuffle
             c.prepare()
@@ -427,7 +441,8 @@ object HubController {
         startSession(app.getString(R.string.mix_name, selected.size), selected.map { it.id }, entries, -1)
     }
 
-    private suspend fun startSession(name: String, ids: List<Long>, entries: List<PlaylistEntry>, index: Int) {
+    private suspend fun startSession(name: String, ids: List<Long>, entries: List<PlaylistEntry>, index: Int, oneShot: Boolean = false) {
+        restored = null
         endSession()
         val start = if (index in entries.indices) index else if (shuffle) entries.indices.random() else 0
         val order = if (shuffle) {
@@ -435,7 +450,7 @@ object HubController {
         } else {
             entries.indices.toMutableList()
         }
-        session = ActiveSession(name, ids, entries, order, order.indexOf(start))
+        session = ActiveSession(name, ids, entries, order, order.indexOf(start)).also { it.oneShot = oneShot }
         scope.launch { playlists.recordPlay(ids) }
         prefetchYouTubeIds(entries)
         playEntry(session!!.pos)
@@ -543,7 +558,8 @@ object HubController {
             localConnection.withController { c ->
                 c.repeatMode = Player.REPEAT_MODE_OFF
                 c.shuffleModeEnabled = false
-                c.setMediaItems(listOf(MediaItems.from(track)), 0, 0L)
+                c.setMediaItems(listOf(MediaItems.from(track)), 0, pendingLocalStartMs)
+                pendingLocalStartMs = 0L
                 c.prepare()
                 c.play()
             }
@@ -1125,6 +1141,17 @@ object HubController {
     private suspend fun advance(auto: Boolean) {
         val s = session ?: return
         if (auto) s.misses = 0
+        if (s.oneShot) {
+            if (auto && repeat == RepeatMode.ONE) {
+                playEntry(s.pos)
+                return
+            }
+            // A resumed single song is over: the app's own queue goes on from here.
+            endSession()
+            if (!auto) externalController?.transportControls?.skipToNext()
+            publish()
+            return
+        }
         when {
             auto && repeat == RepeatMode.ONE -> playEntry(s.pos)
             s.pos + 1 < s.order.size -> playEntry(s.pos + 1)
@@ -1228,6 +1255,126 @@ object HubController {
         }
     }
 
+    // ---------------------------------------------------------------- the last song, across restarts
+
+    /** Shows the song from before the app was closed (until something else plays). */
+    private fun restoreLast() {
+        val last = ResumeStore.load(app) ?: return
+        restoredLast = last
+        val snapshot = SourceSnapshot(
+            kind = if (last.packageName == null) SourceKind.LOCAL else SourceKind.EXTERNAL,
+            appLabel = last.appLabel.ifBlank { app.getString(R.string.source_local) },
+            packageName = last.packageName,
+            track = TrackInfo(
+                title = last.title,
+                artist = last.artist,
+                mediaId = last.mediaId,
+                durationMs = last.durationMs,
+                mediaUri = last.mediaUri,
+            ),
+            isPlaying = false,
+            positionMs = last.positionMs,
+        )
+        restored = snapshot
+        scope.launch {
+            val art = if (last.packageName == null) {
+                ArtLoader.load(app, last.mediaUri, "${last.title}|${last.artist}")
+            } else {
+                ArtStore.load(app, last.title, last.artist)
+            } ?: return@launch
+            val cur = restored ?: return@launch
+            if (cur !== snapshot) return@launch
+            restored = cur.copy(track = cur.track?.copy(art = art))
+            publish()
+        }
+    }
+
+    private fun showingRestored(): Boolean =
+        restored != null && session == null && local.track == null && external?.track == null
+
+    /** Keeps the song on screen (and where it came from) whenever it changes, pauses or seeks. */
+    private fun saveLast(state: HubState) {
+        val cur = state.current
+        val t = cur.track ?: return
+        if (t.title.isBlank() || cur === restored) return
+        val s = session
+        val key = listOf(t.title, t.artist, cur.packageName, cur.isPlaying, cur.positionAtElapsedMs - cur.positionMs, s?.entry?.id)
+        if (key == lastSavedKey) return
+        lastSavedKey = key
+        val now = SystemClock.elapsedRealtime()
+        ResumeStore.save(
+            app,
+            ResumeStore.Last(
+                title = t.title,
+                artist = t.artist,
+                packageName = cur.packageName,
+                appLabel = cur.appLabel,
+                mediaId = t.mediaId,
+                mediaUri = t.mediaUri,
+                durationMs = t.durationMs,
+                positionMs = cur.positionAt(now).coerceAtLeast(0L),
+                playlistIds = if (s != null && !s.oneShot) s.playlistIds else emptyList(),
+                sessionName = s?.name.orEmpty(),
+                entryId = s?.entry?.id ?: -1L,
+                libraryIndex = if (s == null && cur.kind == SourceKind.LOCAL) local.currentQueueIndex else -1,
+            ),
+        )
+    }
+
+    /**
+     * Play / next / previous while the remembered song is shown: continue where it was.
+     * A song from a hub playlist continues inside that playlist; a file on the phone continues
+     * at the same second; another app's song is asked for again (from the beginning).
+     * [offset] is 0 for play, +1 for next, -1 for previous. Returns false when nothing is remembered.
+     */
+    private suspend fun resumeLast(offset: Int): Boolean {
+        if (!showingRestored()) return false
+        val last = restoredLast ?: return false
+        val startMs = if (offset != 0 || (last.durationMs > 0 && last.positionMs > last.durationMs - 5_000L)) 0L else last.positionMs
+
+        if (last.playlistIds.isNotEmpty()) {
+            if (playlists.playlists.value.isEmpty()) playlists.load()
+            val lists = last.playlistIds.mapNotNull { playlists.byId(it) }.filter { it.entries.isNotEmpty() }
+            if (lists.isNotEmpty()) {
+                val entries = if (lists.size == 1) lists[0].entries
+                else lists.flatMap { it.entries }.distinctBy { TrackMatcher.key(it.title, it.artist) }
+                var idx = entries.indexOfFirst { it.id == last.entryId }
+                if (idx < 0) idx = entries.indexOfFirst { TrackMatcher.sameTitle(it.title, last.title) }
+                if (idx < 0) idx = 0
+                val start = (idx + offset).mod(entries.size)
+                if (entries[start].isLocal) pendingLocalStartMs = startMs
+                startSession(if (lists.size == 1) lists[0].name else last.sessionName, lists.map { it.id }, entries, start)
+                return true
+            }
+        }
+
+        if (last.packageName == null) {
+            if (library.tracks.value.isEmpty()) library.refresh()
+            val tracks = library.tracks.value
+            val i = tracks.indexOfFirst { it.uri == last.mediaUri }
+            if (i >= 0) {
+                playLibrary(tracks, (i + offset).mod(tracks.size), startMs)
+                return true
+            }
+            val uri = last.mediaUri ?: return false
+            playLibrary(listOf(LocalTrack("resume", last.title, last.artist, last.durationMs, uri)), 0, startMs)
+            return true
+        }
+
+        val entry = PlaylistEntry(
+            id = -1L,
+            sourcePackage = last.packageName,
+            sourceLabel = last.appLabel,
+            title = last.title,
+            artist = last.artist,
+            mediaUri = null,
+            durationMs = last.durationMs,
+            mediaId = last.mediaId,
+        )
+        startSession(last.title, emptyList(), listOf(entry), 0, oneShot = true)
+        return true
+    }
+
     // ---------------------------------------------------------------- inputs
 
     /** Called by PlaybackService whenever our player reports events. */
@@ -1273,6 +1420,7 @@ object HubController {
             currentQueueIndex = index,
         )
 
+        if (item != null) restored = null
         val s = session
         if (s != null && s.entry.isLocal) {
             if (player.isPlaying) s.localStarted = true
@@ -1366,6 +1514,7 @@ object HubController {
     private fun refreshExternal() {
         val snapshot = externalController?.let { ExternalSnapshots.of(app, it) }
         external = snapshot
+        if (snapshot?.track != null) restored = null
 
         // Hub playlist: has the external app finished the song we asked for?
         val s = session
@@ -1453,7 +1602,7 @@ object HubController {
 
     private fun buildState(): HubState {
         val s = session
-        val shownLocal = embedded?.takeIf { s?.embedded == true } ?: local
+        val shownLocal = embedded?.takeIf { s?.embedded == true } ?: restored?.takeIf { showingRestored() } ?: local
         val base = HubState(
             local = shownLocal,
             external = external,
@@ -1509,6 +1658,7 @@ object HubController {
         _state.value = s
         if (!::app.isInitialized) return
         scheduleArtCapture(s)
+        saveLast(s)
 
         val cur = s.current
         val renderKey = listOf(

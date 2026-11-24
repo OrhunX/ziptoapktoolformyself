@@ -126,6 +126,37 @@ class PlaylistStore(context: Context) {
         id
     }
 
+    /** A new playlist with these songs (imported from another app). Returns its id. */
+    suspend fun createWithEntries(name: String, description: String, entries: List<EntryDraft>): Long = withContext(Dispatchers.IO) {
+        val id = insertPlaylist(name)
+        writeMeta(id, PlaylistMeta(name, description))
+        // One transaction, duplicates skipped in memory (playlists can have hundreds of songs).
+        val db = helper.writableDatabase
+        val seen = HashSet<String>()
+        db.beginTransaction()
+        try {
+            for (draft in entries) {
+                if (!seen.add(TrackMatcher.key(draft.title, draft.artist))) continue
+                db.insertOrThrow(T_ENTRIES, null, ContentValues().apply {
+                    put("playlist_id", id)
+                    put("position", seen.size - 1)
+                    put("source_pkg", draft.sourcePackage)
+                    put("source_label", draft.sourceLabel)
+                    put("title", draft.title)
+                    put("artist", draft.artist)
+                    put("media_uri", draft.mediaUri)
+                    put("duration", draft.durationMs)
+                    put("media_id", draft.mediaId)
+                })
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        publish()
+        id
+    }
+
     /** A playlist from a share code. Returns its id. */
     suspend fun importShared(shared: SharedPlaylist, entries: List<EntryDraft>): Long = withContext(Dispatchers.IO) {
         val id = insertPlaylist(shared.name)

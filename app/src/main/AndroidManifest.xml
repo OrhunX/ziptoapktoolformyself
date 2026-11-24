@@ -87,6 +87,12 @@
             android:showWhenLocked="true"
             android:taskAffinity="com.sen0413.ultimatewidget.lockplayer" />
 
+        <!-- Google's sign-in page for YouTube Music (private playlist import) -->
+        <activity
+            android:name=".ui.YouTubeLoginActivity"
+            android:exported="false"
+            android:label="@string/setup_youtube" />
+
         <!-- Widget editor: opens when the widget is added and again via long-press (reconfigurable) -->
         <activity
             android:name=".ui.WidgetConfigActivity"

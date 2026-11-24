@@ -51,6 +51,9 @@ object SpotifyLink {
     private const val KEY_TOKEN = "token"
     private const val KEY_TOKEN_EXPIRY = "token_expiry"
     private const val KEY_LAST_AUTO_AUTH = "last_auto_auth"
+    private const val KEY_SCOPES = "scopes"
+    /** 2 = the token may also read the user's playlists (import). */
+    private const val SCOPE_VERSION = 2
 
     private val handler = Handler(Looper.getMainLooper())
     private var remote: SpotifyAppRemote? = null
@@ -186,7 +189,7 @@ object SpotifyLink {
     /** Opens Spotify's approval screen (a quick hand-off to the Spotify app once approved). */
     fun authorize(activity: Activity) {
         val request = AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI)
-            .setScopes(arrayOf("app-remote-control"))
+            .setScopes(arrayOf("app-remote-control", "playlist-read-private", "playlist-read-collaborative"))
             .build()
         prefs(activity).edit().putLong(KEY_LAST_AUTO_AUTH, System.currentTimeMillis()).apply()
         runCatching { AuthorizationClient.openLoginActivity(activity, REQUEST_AUTH, request) }
@@ -217,6 +220,7 @@ object SpotifyLink {
                     .putBoolean(KEY_AUTHORIZED, true)
                     .putString(KEY_TOKEN, response.accessToken)
                     .putLong(KEY_TOKEN_EXPIRY, expiry)
+                    .putInt(KEY_SCOPES, SCOPE_VERSION)
                     .apply()
                 connect(context) { }
                 onAuthorized?.invoke()
@@ -234,6 +238,10 @@ object SpotifyLink {
         val token = p.getString(KEY_TOKEN, null) ?: return null
         return if (System.currentTimeMillis() < p.getLong(KEY_TOKEN_EXPIRY, 0L)) token else null
     }
+
+    /** A token that may read the user's playlists, or null (ask for approval again). */
+    fun playlistToken(context: Context): String? =
+        validToken(context)?.takeIf { prefs(context).getInt(KEY_SCOPES, 0) >= SCOPE_VERSION }
 
     private fun clearToken(context: Context) {
         prefs(context).edit().remove(KEY_TOKEN).remove(KEY_TOKEN_EXPIRY).apply()

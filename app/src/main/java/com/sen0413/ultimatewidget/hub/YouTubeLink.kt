@@ -22,10 +22,10 @@ import java.net.URLEncoder
 object YouTubeLink {
     private const val TAG = "YouTubeLink"
     private const val SEARCH_URL = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
-    private const val CLIENT_VERSION = "1.20241120.01.00"
+    const val CLIENT_VERSION = "1.20241120.01.00"
     /** ytmusicapi's "songs" filter. */
     private const val SONGS_FILTER = "EgWKAQIIAWoMEA4QChADEAQQCRAF"
-    private const val USER_AGENT =
+    const val USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
     const val MAX_QUEUE = 50
 

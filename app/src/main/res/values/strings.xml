@@ -125,7 +125,7 @@
     <string name="spotify_not_installed">Spotify is not installed on this phone</string>
     <string name="pin_not_supported">Your launcher can’t add widgets from an app. Long-press the home screen and choose Widgets.</string>
     <string name="about_title">About</string>
-    <string name="about_body">The Ultimate Music Widget · v1.9\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
+    <string name="about_body">The Ultimate Music Widget · v2.0\nSEN0413 · Project 17\nOrhun Utku Topal · Jaweria Qadir · Mustafa Alhussein\n\nFonts: Space Grotesk and DM Sans (SIL Open Font License). Spotify playback uses the Spotify Android SDK (Apache License 2.0).</string>
 
     <!-- Visualizer service -->
     <string name="vis_channel">Visualizer</string>
@@ -172,6 +172,26 @@
     <string name="lock_player_title">Full-screen lock-screen player</string>
     <string name="lock_player_body">Shows the big player when you wake the phone while music plays. The ▾ button shrinks it to the small card; tap the card to open it again.</string>
     <string name="on">On</string>
+    <string name="import_apps">Import from apps</string>
+    <string name="import_apps_title">Import a playlist</string>
+    <string name="import_from_spotify">From Spotify</string>
+    <string name="import_from_youtube">From YouTube Music</string>
+    <string name="import_from_link">Paste a playlist link</string>
+    <string name="import_link_hint">open.spotify.com/playlist/… or music.youtube.com/playlist?list=…</string>
+    <string name="import_link_body">Any Spotify or YouTube Music playlist link. Private YouTube Music playlists need you to sign in.</string>
+    <string name="import_link_invalid">That is not a Spotify or YouTube Music playlist link</string>
+    <string name="import_loading_lists">Loading your playlists…</string>
+    <string name="import_working">Importing…</string>
+    <string name="import_no_lists">No playlists found</string>
+    <string name="import_list_item">%1$s · %2$d songs</string>
+    <string name="import_apps_done">\"%1$s\" imported: %2$d songs</string>
+    <string name="import_failed">That playlist could not be read</string>
+    <string name="import_private">This playlist is private: sign in to YouTube Music</string>
+    <string name="setup_youtube">YouTube Music account</string>
+    <string name="setup_youtube_body">Sign in to import your private playlists and Liked music. You sign in on Google\'s own page; the app keeps only YouTube Music\'s sign-in cookies.</string>
+    <string name="sign_in">Sign in</string>
+    <string name="youtube_signed_in">Signed in to YouTube Music</string>
+    <string name="youtube_sign_in_failed">Not signed in to YouTube Music</string>
     <string name="yt_in_app_title">YouTube Music inside the app</string>
     <string name="yt_in_app_body">Playlist songs from YouTube Music play right here with YouTube\'s embedded player, also in the background: no switching apps. Songs that cannot be embedded still open in YouTube Music. Works best with "Display over other apps" allowed. Off: every song opens in YouTube Music.</string>
     <string name="source_in_app">%1$s · in app</string>

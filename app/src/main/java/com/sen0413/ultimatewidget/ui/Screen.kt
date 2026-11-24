@@ -26,7 +26,9 @@ interface Host {
     fun pickImage(onPicked: (android.net.Uri) -> Unit)
     fun open(tab: Tab)
     /** Asks the user to approve Spotify's SDK (exact songs, played in the background). */
-    fun connectSpotify()
+    fun connectSpotify(then: (() -> Unit)? = null)
+    /** Google's sign-in page for YouTube Music (private playlists); [then] runs once signed in. */
+    fun signInYouTube(then: (() -> Unit)? = null)
 }
 
 /**

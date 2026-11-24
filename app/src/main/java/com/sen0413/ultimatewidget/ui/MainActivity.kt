@@ -29,6 +29,7 @@ import com.sen0413.ultimatewidget.data.EntryDraft
 import com.sen0413.ultimatewidget.data.ArtStore
 import com.sen0413.ultimatewidget.hub.HubController
 import com.sen0413.ultimatewidget.hub.SpotifyLink
+import com.sen0413.ultimatewidget.hub.YouTubeAccount
 import com.sen0413.ultimatewidget.hub.HubState
 import com.sen0413.ultimatewidget.ui.kit.Appearance
 import com.sen0413.ultimatewidget.ui.kit.add
@@ -170,13 +171,23 @@ class MainActivity : Activity(), Host {
         }
     }
 
-    override fun connectSpotify() {
+    override fun connectSpotify(then: (() -> Unit)?) {
         if (!SpotifyLink.isInstalled(this)) {
             toast(getString(R.string.spotify_not_installed))
             return
         }
         spotifyAuthByUser = true
+        spotifyThen = then
         SpotifyLink.authorize(this)
+    }
+
+    private var spotifyThen: (() -> Unit)? = null
+    private var youTubeThen: (() -> Unit)? = null
+
+    override fun signInYouTube(then: (() -> Unit)?) {
+        youTubeThen = then
+        runCatching { startActivityForResult(Intent(this, YouTubeLoginActivity::class.java), REQUEST_YT_LOGIN) }
+            .onFailure { youTubeThen = null }
     }
 
     override fun onResume() {
@@ -394,6 +405,18 @@ class MainActivity : Activity(), Host {
             val ok = SpotifyLink.onAuthResult(this, resultCode, data)
             if (spotifyAuthByUser) toast(getString(if (ok) R.string.spotify_connected else R.string.spotify_failed))
             spotifyAuthByUser = false
+            val then = spotifyThen
+            spotifyThen = null
+            if (ok) then?.invoke()
+            screens.values.forEach { it.onPermissionsChanged() }
+            return
+        }
+        if (requestCode == REQUEST_YT_LOGIN) {
+            val then = youTubeThen
+            youTubeThen = null
+            val ok = resultCode == RESULT_OK && YouTubeAccount.isSignedIn(this)
+            toast(getString(if (ok) R.string.youtube_signed_in else R.string.youtube_sign_in_failed))
+            if (ok) then?.invoke()
             screens.values.forEach { it.onPermissionsChanged() }
             return
         }
@@ -440,5 +463,6 @@ class MainActivity : Activity(), Host {
         private const val STATE_TAB = "tab"
         private const val REQUEST_PERMISSION = 41
         private const val REQUEST_IMAGE = 42
+        private const val REQUEST_YT_LOGIN = 44
     }
 }

@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
  */
 class PlaylistsScreen(host: Host) : Screen(host) {
     private val dialogs = PlaylistDialogs(host)
+    private val importDialogs = ImportDialogs(host)
     private val prefs = context.getSharedPreferences("playlists_ui", Context.MODE_PRIVATE)
     private var sort = runCatching { PlaylistSort.valueOf(prefs.getString("sort", null) ?: "MANUAL") }
         .getOrDefault(PlaylistSort.MANUAL)
@@ -83,6 +84,9 @@ class PlaylistsScreen(host: Host) : Screen(host) {
             add(context.pill(context.getString(R.string.playlist_new)) {
                 host.promptNewPlaylist { id -> open(id) }
             }, ViewGroup.LayoutParams.WRAP_CONTENT)
+            add(context.pill(context.getString(R.string.import_apps), filled = false) {
+                importDialogs.show { id -> open(id) }
+            }, ViewGroup.LayoutParams.WRAP_CONTENT, start = dp(10))
             add(context.pill(context.getString(R.string.enter_code), filled = false) {
                 dialogs.import { id -> open(id) }
             }, ViewGroup.LayoutParams.WRAP_CONTENT, start = dp(10))

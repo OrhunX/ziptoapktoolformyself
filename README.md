@@ -6,6 +6,14 @@ Orhun Utku Topal · Jaweria Qadir · Mustafa Alhussein
 One home-screen widget — and a full player app behind it — for every music app on the
 phone, with a visualizer driven by the real audio. No accounts or API keys are needed.
 
+## What's new in 2.0
+
+- **The widget remembers the last song.** Its title, artist, cover, position and the hub playlist it came from are kept on disk, so after the app is closed (or the phone restarts) the widget still shows it instead of going blank.
+- **Play continues where you left off.** Files on the phone resume at the same second; Spotify / YouTube Music songs start again from the beginning. A song from a hub playlist continues inside that playlist: next and previous move through the playlist.
+- **Import playlists from Spotify and YouTube Music** (Playlists → "Import from apps"): choose from your own playlists, or paste any playlist link. Song covers come along.
+  - Spotify uses the official Web API (playlist-read scopes). Under Spotify's February 2026 development-mode rules only playlists you own or collaborate on return their songs; other public playlists are read from Spotify's public embed page (unofficial).
+  - YouTube Music uses the unofficial InnerTube API. Public and unlisted playlists need no account; private playlists and Liked music need signing in on Google's page (Settings → YouTube Music account). Requests are then signed with the SAPISIDHASH header, as the website does.
+
 ## What's new in 1.9
 
 - **YouTube Music inside the app.** Playlist songs from YouTube Music now play right inside the app with YouTube's official embedded player (IFrame API in an invisible WebView, kept alive by a media foreground service), also with the screen off. No switching to the YouTube Music app, no screen changes; next, previous, seek, repeat and shuffle work exactly like local songs.
